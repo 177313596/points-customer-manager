@@ -1,0 +1,372 @@
+<p align="center">
+  <img src="docs/icon.png" width="128" alt="积分客户管理系统图标" />
+</p>
+
+<h1 align="center">积分客户管理系统</h1>
+
+<p align="center">
+  面向教培 / 培训班 / 小门店的 Windows 桌面会员积分管理工具<br/>
+  Electron + React + SQLite（sql.js），本地优先、双击即用、不联网也能跑
+</p>
+
+<p align="center">
+  <img alt="platform" src="https://img.shields.io/badge/Windows-10%20%2F%2011%20x64-0078D6?logo=windows&logoColor=white" />
+  <img alt="electron" src="https://img.shields.io/badge/Electron-33-47848F?logo=electron&logoColor=white" />
+  <img alt="react" src="https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=white" />
+  <img alt="vite" src="https://img.shields.io/badge/Vite-5-646CFF?logo=vite&logoColor=white" />
+  <img alt="sqlite" src="https://img.shields.io/badge/SQLite-sql.js%20WASM-003B57?logo=sqlite&logoColor=white" />
+  <img alt="size" src="https://img.shields.io/badge/installer-78.09%20MB-2E7D32" />
+</p>
+
+<p align="center">
+  <a href="#-界面预览">界面预览</a> ·
+  <a href="#-功能特性">功能特性</a> ·
+  <a href="#-快速开始">快速开始</a> ·
+  <a href="#-目录结构">目录结构</a> ·
+  <a href="#-测试与自检">测试</a> ·
+  <a href="#-常见问题">FAQ</a>
+</p>
+
+---
+
+## 📖 这是什么
+
+一个把「顾客积分账本」做成桌面软件的项目：
+
+- **不是网页、不需要服务器**：Electron 打包成 exe，双击运行，离线可用。
+- **数据是标准的 SQLite 文件**：可以用任意 SQLite 工具打开、导出、备份、迁移，不做私有格式锁定。
+- **双重密码**：登录密码进入系统，操作密码在改动数据前二次确认（scrypt + 随机盐哈希，本机不可逆）。
+- **两种界面模式**：标准版（背景图 + 高斯模糊过渡，观感优先）/ 简洁版（关掉背景与全部动画，老电脑更跟手）。
+
+适合场景：积分兑换礼品或抵扣消费的小店、培训班学员积分、会员储值式的余额消费（余额只能由积分兑换产生，不允许手工改余额）。
+
+---
+
+## 🖼 界面预览
+
+| 登录页 | 工作台 |
+| --- | --- |
+| ![登录页](docs/screenshots/login.png) | ![工作台](docs/screenshots/dashboard.png) |
+
+| 设置 · 界面模式（标准版） | 简洁版工作台 |
+| --- | --- |
+| ![设置-标准版](docs/screenshots/settings-standard.png) | ![简洁版](docs/screenshots/lite-dashboard.png) |
+
+> 截图由项目内的离屏脚本（`app/scripts/brand-shot.js`、`app/scripts/ui-mode-shot.js`）真实渲染后捕获，非设计稿。
+
+---
+
+## ✨ 功能特性
+
+### 工作台
+- 三张指标卡：今日消费额 / 今日新增积分 / 会员总数。
+- **积分**：搜顾客 → 输金额（只接受数字与小数点，回车即提交）→ 实时显示「预计 +N 分」→ 一键把金额换成积分（**不动余额**）。
+- **消费余额**：同一套操作，显示可用余额与消费后余额 → 一键从余额扣款（**不产生积分**，余额不足直接拦住）。
+- 消费余额选中顾客后，可直接在该卡片内做**积分兑换**（弹窗支持「全部（N 份）」一键选到最大值）。
+- 近 7 日消费柱状图 + 积分榜。
+
+### 顾客管理
+- 姓名 / 班级 / 手机号即时搜索，班级下拉筛选，7 种排序（最新建档、积分高低、余额、累计消费等）。
+- 每行操作：消费余额、转化积分、积分兑换、手动调整、编辑、删除。
+- **手动调整每次都必须重新输入操作密码**（不受 10 分钟授权窗口影响），且只能改积分、不能改余额。
+- 有交易记录的顾客禁止删除，避免账目出现缺口。
+
+### 消费记录
+- 时间**精确到秒**，按类型（积分转化 / 消费余额 / 充值 / 兑换 / 调整）、日期区间、关键字筛选。
+- 顶部汇总：记录数、消费合计、积分变动、余额变动；可一键导出当前筛选结果。
+
+### 导入导出
+- 顾客名单 / 消费记录：Excel（.xlsx）与 CSV 双向导入导出，附模板下载。
+- 同名同班精确匹配；顾客超过 500 人也不再用逐行分页查询（导入前一次性建索引）。
+- CSV 读取自动识别编码：UTF-8 优先，遇到乱码回退 **GBK**（中文 Excel 另存的 CSV 直接可导）。
+- 逐行容错：单行出错不会整批失败，会列出具体行号与原因。
+
+### 设置
+- 左侧二级栏目：基础信息 / 外观与背景 / 积分规则 / 安全设置 / 云端同步 / 数据与备份。
+- **界面模式**：标准版 ↔ 简洁版，点击即生效、自动保存，不需要操作密码。
+- **背景图**：可导入多张（单张最大 8K、≤ 50MB），登录页与主界面共用，原样铺满不加蒙版；可开启每 8 秒轮播（默认关闭）；切换时「高斯模糊 → 清晰」。
+- **个性化配色**：7 个预设 + 任意 `#RRGGBB` 取色，实时预览，保存后持久化。
+- 安全设置：可改用户名 / 登录密码 / 操作密码，改哪套就验哪套的当前密码。
+
+### 其它
+- **使用声明**：首次启动强制倒计时 10 秒后才能勾选同意，同意时间写入数据库；登录页右下角可随时重看。
+- **无边框圆角窗口**：自绘最小化 / 最大化 / 关闭，连续曲率圆角，最大化时自动直角化。
+- **单实例运行**：重复启动会聚焦已有窗口，避免两个进程同时写库。
+- **云端同步（可选）**：本地优先，未启用时零网络请求。
+
+---
+
+## 🧮 积分与余额规则
+
+默认规则：**每满 10 元积 1 分；15 分兑换 10 元余额。** 可在设置页修改，规则改完只影响之后的交易。
+
+| 项目 | 规则 |
+| --- | --- |
+| 得分 | `floor(本笔金额 / 10) * 1`，**按单笔取整**，不做跨笔累计 |
+| 兑换 | 按「份」计：1 份 = 15 分 → 10 元余额；份数不足直接拦 |
+| 转化积分 | 只加积分 + 累加累计消费，**余额不变** |
+| 消费余额 | 只扣余额 + 累加累计消费，**不产生积分**，不允许透支 |
+| 手动调整 | 只能改积分，不能改余额；每次都要操作密码 |
+| 余额来源 | 只能由**积分兑换**产生，只能由**消费余额**消耗 |
+
+> 想改成跨笔累计或四舍五入，只需修改 `app/electron/db.js` 里的 `pointsForAmount()`。
+
+---
+
+## 🛠 技术栈
+
+| 层 | 选型 | 说明 |
+| --- | --- | --- |
+| 桌面壳 | Electron 33 | Windows x64，无边框自绘窗口 |
+| 界面 | React 18 + Vite 5 | 纯 CSS（无 UI 框架），自定义设计变量 |
+| 数据 | sql.js 1.10（SQLite WASM 构建） | 无原生模块，免编译，跨机器直接跑 |
+| 表格 | SheetJS (xlsx) 0.18 | Excel / CSV 读写，含 GBK 回退 |
+| 打包 | electron-builder 26（NSIS） | 安装包 + 免安装目录双形态 |
+| 安全 | Node `crypto.scrypt` + 随机盐 | 两套密码分别加盐哈希，不可逆 |
+
+### 架构
+
+```mermaid
+flowchart LR
+  UI["React 渲染层<br/>src/"] -->|window.api（contextBridge）| P["preload.js"]
+  P -->|IPC invoke| M["主进程 main.js<br/>权限：public / token / elevated"]
+  M --> D["数据层 db.js"]
+  M --> C["云端同步 cloud.js"]
+  M --> I["导入解析 importer.js"]
+  D --> F[("points-data.db<br/>标准 SQLite 文件")]
+  C -.->|按队列增量推送| X["自有 HTTP 接口 或 飞书多维表格"]
+```
+
+关键设计：**渲染层不直接碰数据库**。所有写操作走 IPC，主进程按 `{ public / 需要登录 token / 需要操作密码 elevated }` 分级校验，界面上的按钮限制只是第一道门，服务端（主进程）会二次校验。
+
+---
+
+## 🚀 快速开始
+
+### 环境要求
+- Windows 10 / 11 x64
+- Node.js ≥ 18（建议 20 LTS）
+- npm（项目内 `.npmrc` 已配置国内镜像，含 electron / electron-builder 二进制镜像）
+
+### 开发运行
+
+```powershell
+cd app
+npm install
+
+# 方式一：直接跑打包后的界面（改完代码需重新 build:render）
+npm run build:render
+npm start
+
+# 方式二：前端热更新（两个终端）
+npm run dev:render                      # 终端 A，Vite 5173
+$env:VITE_DEV_SERVER_URL="http://localhost:5173"; npm start   # 终端 B
+```
+
+### 打包
+
+```powershell
+cd app
+npm run build:installer     # 产出 release\积分客户管理系统-安装包-1.0.0.exe（NSIS）
+```
+
+或在仓库根目录使用一键脚本（会先构建界面再同步 / 打包）：
+
+```powershell
+.\重新构建.ps1      # 构建 dist 并同步到免安装目录 积分客户管理系统\
+.\构建安装包.ps1    # 构建 + 打 NSIS 安装包，并复制到仓库根目录
+```
+
+> 打包前请先关闭正在运行的实例：`Get-Process -Name '积分客户管理*' | Stop-Process -Force`，否则文件被占用会导致打包失败。
+
+---
+
+## 📁 目录结构
+
+```
+.
+├── app/                        # 完整源码
+│   ├── electron/
+│   │   ├── main.js             # 主进程：窗口、IPC 路由与权限分级
+│   │   ├── preload.js          # contextBridge 暴露 window.api
+│   │   ├── db.js               # 数据层：建表、设置、积分规则、顾客/流水、备份
+│   │   ├── importer.js         # Excel / CSV 解析、顾客索引、GBK 回退
+│   │   └── cloud.js            # 云同步适配器（generic / feishu）
+│   ├── src/
+│   │   ├── App.jsx             # 路由与外壳、界面模式门控、自绘窗口按钮
+│   │   ├── styles.css          # 设计变量（圆角刻度、配色）与 ui-lite 规则
+│   │   ├── components/         # Login / Dashboard / Customers / Records / DataIO / Settings / TermsGate / TxModal
+│   │   └── assets/brand-logo.png
+│   ├── scripts/                # 离屏回归与截图脚本（见下）
+│   ├── build/                  # 应用图标 icon.ico / icon.png
+│   └── package.json            # 脚本、依赖、electron-builder 配置
+├── docs/
+│   ├── icon.png
+│   └── screenshots/
+├── 积分客户管理系统/             # 免安装目录版成品（可选提交 / 建议走 Release）
+├── 积分客户管理系统-安装包-1.0.0.exe
+├── 重新构建.ps1
+├── 构建安装包.ps1
+├── 使用说明.md                  # 面向使用者的完整手册
+├── 修改指南.md                  # 面向二次开发：每处功能怎么改
+└── 云端同步接入说明.md           # 两种云同步对接步骤
+```
+
+---
+
+## 💾 数据与备份
+
+| 内容 | 位置 |
+| --- | --- |
+| 主数据库 | `%APPDATA%\积分客户管理系统\data\points-data.db` |
+| 备份文件 | `%APPDATA%\积分客户管理系统\data\backups\` |
+| 背景图 | `%APPDATA%\积分客户管理系统\login-bg\`（只存文件，库里存 `file:///` 地址） |
+
+- 数据库表：`customers`、`transactions`、`settings`、`sync_queue`（含姓名 / 班级 / 时间索引）。
+- **备份 = 复制这个 .db 文件**。安装包卸载默认**不删数据**，重装后接着用。
+- 迁移到另一台电脑：拷 `data\points-data.db` 过去即可（建议同时拷 `login-bg\`）。
+- 注意别把大图塞进数据库：sql.js 每次落盘都会整库重写，50MB 背景图会让每笔交易变卡，所以图片单独存文件。
+
+---
+
+## 🔐 安全设计
+
+- 登录密码、操作密码分别用 **scrypt + 独立随机盐** 哈希，只存哈希，不可逆、无后门、**不支持找回**。
+- 两套密码不能相同，各自至少 4 位；用户名大小写不敏感。
+- 操作授权窗口 **10 分钟**：验过操作密码后短时间内不重复弹窗；但「手动调整」是例外——**每次都强制重输**。
+- 主进程对所有写操作做**二次校验**，不依赖界面禁用；积分与余额都不会被扣成负数。
+- 渲染层开启 `contextIsolation`，只通过 `preload` 暴露白名单方法，不开放 `nodeIntegration`。
+- 首次使用必须阅读《使用声明》并**倒计时 10 秒**后才能同意，记录同意时间。
+
+> 提醒：这是本地软件，拥有电脑文件访问权的人可以直接拷贝 / 替换 `.db` 文件。要防「拿到文件就能改数据」，需要在操作系统层做磁盘加密与账号隔离，软件本身无法替代。
+
+---
+
+## ☁️ 云端同步（可选）
+
+本地优先（local-first）：所有写操作先落本地库 + 写入 `sync_queue`，再按队列增量推送；推送失败自动标记重试，**不阻塞收银**。
+
+| 适配器 | 适用 |
+| --- | --- |
+| `generic` | 自有 HTTP 接口，POST JSON 批量记录，支持 `Bearer` Token |
+| `feishu` | 飞书多维表格（Bitable），自动映射「顾客表 / 消费记录表」字段 |
+
+未开启时程序**不发任何网络请求**。详细配置步骤见 [云端同步接入说明.md](./云端同步接入说明.md)，仓库 `工具\云端接收端示例.js` 提供可直接运行的接收端示例。
+
+---
+
+## 🎛 界面模式与性能
+
+| | 标准版（默认） | 简洁版 |
+| --- | --- | --- |
+| 背景图 | 显示，支持多张轮播 | 不加载（设置保留，切回即恢复） |
+| 高斯模糊过渡 | 页面切换、弹窗、背景切换 | 全部关闭，`animation / transition: none` |
+| 弹窗毛玻璃 | `backdrop-filter: blur()` | 关闭 |
+| 卡片阴影 | 完整层次 | 降级为 `0 2px 8px` |
+| 加载动画 | 正常 | 保留（否则看不到加载状态） |
+
+切换入口：**设置 → 外观与背景 → 界面模式**，立即生效、自动保存、不需要操作密码。老机器或远程桌面场景建议简洁版。
+
+---
+
+## ✅ 测试与自检
+
+`app/scripts/` 下是一组**离屏 Electron 回归脚本**，全部在临时目录跑，不触碰真实数据文件：
+
+| 脚本 | 覆盖 |
+| --- | --- |
+| `headless-check.js` | 90+ 条界面断言（登录、工作台、顾客、记录、设置、窗口按钮、背景层、`uiModeSwitch`…） |
+| `ui-mode-test.js` | 12 项界面模式 IPC 断言（默认值、权限、非法值、落库） |
+| `io-import-test.js` | 导入回归：同名不同班精确匹配、按姓名命中、自动建档、GBK CSV |
+| `bg-multi-ipc-test.js` | 多背景图增删清空、路径越界防护 |
+| `pw-change-test.js` | 双密码修改与校验 |
+| `terms-test.js` | 使用声明倒计时与同意持久化 |
+| `ui-mode-shot.js` / `brand-shot.js` / `mainbg-shot.js` / `win-frame-check.js` | 真实渲染截图与窗口圆角校验 |
+
+```powershell
+cd app
+npx electron scripts/headless-check.js        # 期望输出 RESULT ALL-PASS
+npx electron scripts/ui-mode-test.js           # 期望 12 项全 PASS
+$env:PM_CSV_GBK="C:\path\to\gbk.csv"; npx electron scripts/io-import-test.js
+```
+
+日志建议重定向到文件再读（Electron 子进程的 stdout 在部分终端会被截断）：
+
+```powershell
+npx electron scripts/headless-check.js 2>&1 | Tee-Object -FilePath "$env:TEMP\check.txt" | Out-Null
+```
+
+---
+
+## 📚 相关文档
+
+| 文档 | 读者 | 内容 |
+| --- | --- | --- |
+| [使用说明.md](./使用说明.md) | 使用者 | 安装、首次初始化、五个页面怎么用、积分规则、数据位置、备份恢复 |
+| [修改指南.md](./修改指南.md) | 二次开发者 | 界面模式怎么改、配色/圆角/背景、积分规则、IPC 权限、重新打包 |
+| [云端同步接入说明.md](./云端同步接入说明.md) | 运维 / 开发者 | `generic` 与飞书多维表格两种对接方式 |
+
+---
+
+## ❓ 常见问题
+
+<details>
+<summary><b>打开后要求初始化，用户名密码填什么？</b></summary>
+
+首次启动没有默认密码，需要自己设置用户名 + 登录密码 + 操作密码（两套密码不能相同、各至少 4 位）。升级旧版本时用户名默认是 `admin`，可在「设置 → 安全设置」修改。
+</details>
+
+<details>
+<summary><b>忘记密码了怎么办？</b></summary>
+
+无法找回（没有后门）。只能备份后删除 `%APPDATA%\积分客户管理系统\data\points-data.db` 重新初始化，数据会一起丢失——所以请定期用设置页的「备份到文件」。
+</details>
+
+<details>
+<summary><b>为什么「手动调整」每次都要输密码？</b></summary>
+
+这是刻意设计：它是唯一能直接改积分的入口，不受 10 分钟授权窗口影响，避免有人借已授权状态偷偷改分。
+</details>
+
+<details>
+<summary><b>余额能不能直接充值？</b></summary>
+
+不能。余额只有一个来源（积分兑换）和一个出口（消费余额）。历史充值记录仍可在消费记录里按「充值」筛出查看。
+</details>
+
+<details>
+<summary><b>能同时开安装版和免安装版吗？</b></summary>
+
+不能，两者读写同一个数据目录且限制单实例，第二个启动会自动退出（会聚焦已开窗口）。
+</details>
+
+<details>
+<summary><b>这台电脑很老，界面有点卡？</b></summary>
+
+设置 → 外观与背景 → 切到**简洁版**：关闭背景图、全部动画与模糊，明显更跟手。
+</details>
+
+<details>
+<summary><b>能做成安卓 APK 吗？</b></summary>
+
+可以，但不是「换个打包命令」就行：Electron 不能直接编译到 Android。可行路线是 Capacitor 复用 React 界面（约 90% UI 代码可留），但主进程的 IPC、密码校验、文件读写都要重写到前端 + 原生插件，数据库可继续用 sql.js（.db 文件与桌面版互通）；同时 APK 里的 JS 可被反编译，安全性弱于桌面版。预计 10–14 个工作日，且低端安卓建议默认简洁版。
+</details>
+
+---
+
+## 🧭 已知限制
+
+- 仅支持 **Windows 10/11 x64**（未做 macOS / Linux 打包配置）。
+- 安装包未做代码签名，首次运行可能触发 SmartScreen 提示（「更多信息 → 仍要运行」）。
+- 云同步是「本地优先的增量推送」，不做双向冲突合并；多端同时改同一顾客需要人工确认。
+- 密码只保护软件内的操作，不能防止有人直接替换数据库文件。
+
+---
+
+## 📄 许可与免责
+
+- 本仓库为个人项目，`package.json` 中 `license` 为 `UNLICENSED`：**未授予商业使用、再分发或二次售卖许可**；如需授权请先联系作者。
+- 软件按「现状」提供，不承诺适用于任何特定的经营 / 财务记账场景。积分与余额数据请自行定期备份并核对；因数据丢失、误操作或规则设置不当造成的损失，作者不承担责任。
+- 涉及真实顾客姓名、手机号等信息时，请自行遵守《个人信息保护法》等适用法规，做好访问控制与备份加密。
+
+<p align="center"><sub>Built with Electron · React · sql.js — 本地优先，数据始终在自己电脑上</sub></p>

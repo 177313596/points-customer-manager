@@ -1,0 +1,99 @@
+{
+  "name": "points-customer-manager",
+  "productName": "积分客户管理系统",
+  "version": "1.0.0",
+  "description": "积分客户管理系统 - 积分计算 / 批量导入导出 / 顾客检索 / 消费记录",
+  "main": "electron/main.js",
+  "author": "Points Manager",
+  "license": "UNLICENSED",
+  "private": true,
+  "scripts": {
+    "dev:render": "vite",
+    "build:render": "vite build",
+    "start": "electron .",
+    "build:installer": "electron-builder --win nsis"
+  },
+  "build": {
+    "appId": "com.points.customermanager",
+    "productName": "积分客户管理系统",
+    "copyright": "积分客户管理系统",
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "electron/**/*",
+      "dist/**/*",
+      "package.json",
+      "!scripts/**/*",
+      "!src/**/*",
+      "!build/**/*",
+      "!release/**/*",
+      "!**/*.map",
+      "!**/node_modules/electron/**",
+      "!**/node_modules/electron-builder/**",
+      "!node_modules/sql.js/dist/sqljs-all.zip",
+      "!node_modules/sql.js/dist/sql-asm*",
+      "!node_modules/sql.js/dist/worker.*",
+      "!node_modules/sql.js/dist/*inline*",
+      "!node_modules/sql.js/dist/*browser*",
+      "!node_modules/sql.js/dist/*-debug*",
+      "!node_modules/sql.js/examples/**",
+      "!node_modules/sql.js/src/**",
+      "!node_modules/sql.js/*.md",
+      "!node_modules/sql.js/*.svg",
+      "!node_modules/sql.js/.devcontainer/**",
+      "!node_modules/sql.js/dist/*.zip",
+      "!node_modules/xlsx/*.png",
+      "!node_modules/xlsx/*.md",
+      "!node_modules/xlsx/*.mjs",
+      "!node_modules/xlsx/types/**",
+      "!node_modules/codepage/**",
+      "!node_modules/cfb/**",
+      "!node_modules/crc-32/**",
+      "!node_modules/ssf/**",
+      "!node_modules/wmf/**"
+    ],
+    "asar": true,
+    "compression": "maximum",
+    "electronLanguages": ["zh-CN", "en-US"],
+    "asarUnpack": [
+      "node_modules/sql.js/dist/*.wasm"
+    ],
+    "win": {
+      "target": [
+        { "target": "nsis", "arch": ["x64"] }
+      ],
+      "icon": "build/icon.ico",
+      "artifactName": "积分客户管理系统-安装包-${version}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowElevation": true,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "积分客户管理系统",
+      "installerIcon": "build/icon.ico",
+      "installerHeaderIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico",
+      "uninstallDisplayName": "积分客户管理系统",
+      "deleteAppDataOnUninstall": false,
+      "language": "2052",
+      "installerLanguages": ["zh_CN"]
+    }
+  },
+  "dependencies": {
+    "sql.js": "^1.10.3",
+    "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.4",
+    "electron": "^33.4.11",
+    "electron-builder": "^26.18.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "vite": "^5.4.11"
+  }
+}

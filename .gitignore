@@ -1,0 +1,50 @@
+# ---- 依赖 ----
+node_modules/
+app/node_modules/
+.pnp
+.pnp.js
+
+# ---- 构建 / 打包产物（不要进 Git，安装包走 Releases）----
+app/dist/
+app/release/
+release/
+dist/
+build/icon.ico.bak
+
+# ---- 可执行文件与压缩包 ----
+*.exe
+*.msi
+*.dll
+*.asar
+*.asar.unpacked/
+*.zip
+*.7z
+*.rar
+*.blockmap
+
+# ---- 本地数据库 / 用户数据 ----
+*.db
+*.db-journal
+data/
+login-bg/
+backups/
+
+# ---- 日志与临时文件 ----
+*.log
+logs/
+npm-debug.log*
+*.tmp
+Thumbs.db
+desktop.ini
+
+# ---- 编辑器 / 系统 ----
+.vscode/
+.idea/
+.DS_Store
+*.swp
+
+# ---- 归档目录（本地历史清理备份，不进仓库）----
+清空归档/
+
+# ---- 免安装成品目录（Electron 运行时 + 打包产物，走 Releases）----
+积分客户管理系统/
