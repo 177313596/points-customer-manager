@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api, fmtMoney, relativeTime } from './utils';
-import { Icon, Modal } from './ui';
+import { Icon, Modal, GlassDefs } from './ui';
 import Login from './components/Login';
 import Dashboard from './components/Dashboard';
 import Customers from './components/Customers';
@@ -55,6 +55,14 @@ export default function App() {
     document.body.classList.toggle('ui-lite', lite);
     return () => document.body.classList.remove('ui-lite');
   }, [lite]);
+
+  /* 液态玻璃：与界面模式正交的独立开关。简洁版强制关闭，避免折射的 GPU 开销；
+     其余情况看 settings.liquid_glass（默认开启，可在设置里手动关掉只留普通毛玻璃） */
+  const liquidOn = !lite && !(settings && settings.liquid_glass === false);
+  useEffect(() => {
+    document.body.classList.toggle('ui-liquid', liquidOn);
+    return () => document.body.classList.remove('ui-liquid');
+  }, [liquidOn]);
 
   useEffect(() => { setAppBgIdx(0); }, [appBgKey]);
 
@@ -165,11 +173,11 @@ export default function App() {
     return () => clearInterval(t);
   }, [authed]);
 
-  if (boot) return <><div className="splash"><div className="loading-dot" /></div><WinChrome /></>;
+  if (boot) return <><div className="splash"><div className="loading-dot" /></div><GlassDefs /><WinChrome /></>;
   if (!authed) return <><Login onAuthed={(opts) => {
     setAuthed(true);
     if (opts && opts.page) { setPage(opts.page); setSettingsTab(opts.tab || ''); }
-  }} /><WinChrome /></>;
+  }} /><GlassDefs /><WinChrome /></>;
 
   const meta = PAGES.find((p) => p.key === page);
   const elevatedLeft = Math.max(0, Math.floor((elevatedUntil - nowTs) / 1000));
@@ -305,6 +313,7 @@ export default function App() {
 
       {toast ? <div className={'toast ' + (toast.type || 'ok')}>{toast.msg}</div> : null}
     </div>
+    <GlassDefs />
     <WinChrome />
     </>
   );

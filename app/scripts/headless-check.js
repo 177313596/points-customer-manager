@@ -48,8 +48,10 @@ async function main() {
     redeem_rule: { points: 15, balance_cents: 1000 },
     cloud_config: { enabled: false }, login_username: '管理员',
     login_bg: bgUrl, login_bgs: [bgUrl], login_bg_rotate: false, theme: { accent: '#0F766E' },
+    ui_mode: 'standard', liquid_glass: true,
     op_required: opRequired,
   }));
+  ipcMain.handle('settings:set-liquid-glass', () => ok({ liquid_glass: true }));
   ipcMain.handle('auth:set-op-password', () => { opRequired = true; return ok({ op_required: true }); });
   ipcMain.handle('auth:disable-op', () => { opRequired = false; return ok({ op_required: false }); });
   ipcMain.handle('stats:overview', () => ok({
@@ -358,6 +360,25 @@ async function main() {
         return (before === 'pageBlurIn' && after === 'none' && (blur === 'none' || blur === 'nomodal')) ? 'ok' : (before + '|' + after + '|' + blur);
       })()
     `).catch(() => 'err')) === 'ok',
+    // 液态玻璃：标准版默认开（body 有 ui-liquid，浮层带 url(#lg-refract) 折射滤镜）；
+    // 加 ui-lite 后不再生效；摘掉 ui-liquid 后回到普通毛玻璃
+    glassSwitch: (await win.webContents.executeJavaScript(`
+      (() => {
+        const probe = document.createElement('div');
+        probe.className = 'modal';
+        document.body.appendChild(probe);
+        const bodyHas = document.body.classList.contains('ui-liquid');
+        const on = getComputedStyle(probe).backdropFilter;
+        document.body.classList.add('ui-lite');
+        const lite = getComputedStyle(probe).backdropFilter;
+        document.body.classList.remove('ui-lite', 'ui-liquid');
+        const off = getComputedStyle(probe).backdropFilter;
+        document.body.classList.add('ui-liquid');
+        const hasFilterDef = !!document.querySelector('#lg-refract');
+        probe.remove();
+        return [bodyHas, /url\\(/.test(on) ? 'url' : on, /none/.test(lite) ? 'none' : lite, off, hasFilterDef].join('|');
+      })()
+    `).catch(() => 'err')) === 'true|url|none|none|true',
   };
   Object.entries(dashChecks).forEach(([k, v]) => log((v ? 'PASS ' : 'FAIL ') + k));
 
@@ -573,6 +594,16 @@ async function main() {
     themePresets: Number(apObj.swatches || 0) >= 5,
     themeColorPicker: apObj.colorPicker === 'color',
     themeVarsFromSettings: apObj.accentVars === '#0F766E',
+    // 液态玻璃独立开关：文案与开关同在「外观与背景」，且默认开启
+    hasLiquidGlassSwitch: apText.includes('液态玻璃效果')
+      && (await win.webContents.executeJavaScript(`
+        (() => {
+          const lines = [...document.querySelectorAll('.rule-line')];
+          const line = lines.find((l) => l.textContent.includes('液态玻璃效果'));
+          const sw = line ? line.querySelector('.switch') : null;
+          return sw ? 'on' : 'missing';
+        })()
+      `).catch(() => 'err')) === 'on',
   });
 
   /* ---- 个性化配色：点预设色要立刻预览（改 :root 变量） ---- */

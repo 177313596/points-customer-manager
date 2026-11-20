@@ -52,7 +52,15 @@
 | --- | --- |
 | ![设置-标准版](docs/screenshots/settings-standard.png) | ![简洁版](docs/screenshots/lite-dashboard.png) |
 
-> 截图由项目内的离屏脚本（`app/scripts/brand-shot.js`、`app/scripts/ui-mode-shot.js`）真实渲染后捕获，非设计稿。
+| 液态玻璃 · 开（背景被折射） | 液态玻璃 · 关（不透明白卡） |
+| --- | --- |
+| ![液态玻璃开](docs/screenshots/liquid-refract-on.png) | ![液态玻璃关](docs/screenshots/liquid-refract-off.png) |
+
+| 设置 · 视觉效果开关（开） | 关掉后只留普通毛玻璃 |
+| --- | --- |
+| ![开关开](docs/screenshots/settings-liquid-on.png) | ![开关关](docs/screenshots/settings-liquid-off.png) |
+
+> 截图由项目内的离屏脚本（`app/scripts/brand-shot.js`、`app/scripts/ui-mode-shot.js`、`app/scripts/glass-shot.js`、`app/scripts/liquid-shot.js`）真实渲染后捕获，非设计稿。
 
 ---
 
@@ -167,7 +175,7 @@ $env:VITE_DEV_SERVER_URL="http://localhost:5173"; npm start   # 终端 B
 
 ```powershell
 cd app
-npm run build:installer     # 产出 release\积分客户管理系统-安装包-1.1.1.exe（NSIS）
+npm run build:installer     # 产出 release\积分客户管理系统-安装包-1.1.2.exe（NSIS）
 ```
 
 或在仓库根目录使用一键脚本（会先构建界面再同步 / 打包）：
@@ -204,7 +212,7 @@ npm run build:installer     # 产出 release\积分客户管理系统-安装包-
 │   ├── icon.png
 │   └── screenshots/
 ├── 积分客户管理系统/             # 免安装目录版成品（可选提交 / 建议走 Release）
-├── 积分客户管理系统-安装包-1.1.1.exe
+├── 积分客户管理系统-安装包-1.1.2.exe
 ├── 重新构建.ps1
 ├── 构建安装包.ps1
 ├── 使用说明.md                  # 面向使用者的完整手册
@@ -271,6 +279,13 @@ npm run build:installer     # 产出 release\积分客户管理系统-安装包-
 
 ## 🗒 更新日志
 
+**v1.1.2（2026-11-20）**
+
+- 新增**独立开关「液态玻璃效果」**（设置 → 外观与背景 → 视觉效果）：登录卡、弹窗、使用声明卡变成半透明玻璃，背景透过卡片时被**真实折射**（`backdrop-filter: url(#lg-refract)` 的 SVG 位移滤镜，不是简单模糊），并带内侧玻璃高光与染色。
+- 液态玻璃与标准版 / 简洁版**相互独立**：标准版默认开启，可单独关掉只保留普通毛玻璃（更省显卡）；简洁版一律强制关闭，开关呈灰态并提示「固定关闭」。
+- 开关即时生效、自动保存，**不需要操作密码**；主内容区的卡片与数字保持不透明，避免影响读数。
+- 回归新增 `glassSwitch`（body 类、`url(#lg-refract)` 折射、简洁版为 `none`、关闭后回 `none`、滤镜节点存在）、`hasLiquidGlassSwitch`（设置页文案与开关默认开启）以及 `ui-mode-test.js` 的 7 项液态玻璃 IPC 断言；新增 `glass-shot.js` / `liquid-shot.js` 两组真实渲染截图脚本。
+
 **v1.1.1（2026-11-20）**
 
 - 操作密码改为**空闲 5 分钟失效**：登录后验证一次即生效，之后只要连续 5 分钟内有鼠标/键盘操作就一直是授权状态（右上角倒计时随操作刷新），超过 5 分钟没有任何操作才需要重新输入；退出登录、修改操作密码都会立即清空授权。「手动调整积分」仍每次强制输入。
@@ -294,8 +309,8 @@ npm run build:installer     # 产出 release\积分客户管理系统-安装包-
 
 | 脚本 | 覆盖 |
 | --- | --- |
-| `headless-check.js` | 90+ 条界面断言（登录、工作台、顾客、记录、设置、窗口按钮、背景层、`uiModeSwitch`…） |
-| `ui-mode-test.js` | 12 项界面模式 IPC 断言（默认值、权限、非法值、落库） |
+| `headless-check.js` | 90+ 条界面断言（登录、工作台、顾客、记录、设置、窗口按钮、背景层、`uiModeSwitch`、`glassSwitch`、`hasLiquidGlassSwitch`…） |
+| `ui-mode-test.js` | 19 项界面模式与液态玻璃 IPC 断言（默认值、权限、非法值、落库、关闭后 status 同步） |
 | `io-import-test.js` | 导入回归：同名不同班精确匹配、按姓名命中、自动建档、GBK CSV |
 | `bg-multi-ipc-test.js` | 多背景图增删清空、路径越界防护 |
 | `pw-change-test.js` | 双密码修改与校验 |
@@ -304,11 +319,12 @@ npm run build:installer     # 产出 release\积分客户管理系统-安装包-
 | `terms-hit-verify.js` | 使用声明热区回归：倒计时内点勾选框/按钮留白有提示、解锁后能勾上并同意 |
 | `terms-test.js` | 使用声明倒计时与同意持久化 |
 | `ui-mode-shot.js` / `brand-shot.js` / `mainbg-shot.js` / `win-frame-check.js` | 真实渲染截图与窗口圆角校验 |
+| `glass-probe.js` / `glass-shot.js` / `liquid-shot.js` | 液态玻璃：滤镜可行性探针、开/关折射对比截图、设置页开关截图 |
 
 ```powershell
 cd app
 npx electron scripts/headless-check.js        # 期望输出 RESULT ALL-PASS
-npx electron scripts/ui-mode-test.js           # 期望 12 项全 PASS
+npx electron scripts/ui-mode-test.js           # 期望 19 项全 PASS
 $env:PM_CSV_GBK="C:\path\to\gbk.csv"; npx electron scripts/io-import-test.js
 ```
 

@@ -48,6 +48,8 @@ const DEFAULT_SETTINGS = {
   login_bg_rotate: 'false',
   // 界面模式：standard（标准版，含背景图与高斯模糊过渡）/ lite（简洁版，关掉动画与背景图，更快）
   ui_mode: 'standard',
+  // 液态玻璃效果（弹窗/卡片/登录卡的折射高光）：默认开启；简洁版强制关闭；关掉后只保留普通毛玻璃
+  liquid_glass: 'true',
 };
 
 /* ---------------- 工具 ---------------- */
@@ -241,6 +243,7 @@ function getSettingsPublic() {
     login_bgs: getLoginBgList(),
     login_bg_rotate: getLoginBgRotate(),
     ui_mode: getUiMode(),
+    liquid_glass: getLiquidGlass(),
     theme: getTheme(),
     op_required: isOpRequired(),
   };
@@ -334,11 +337,24 @@ function setLoginBg(value) {
   return v;
 }
 
+/* ---------------- 液态玻璃 ---------------- */
+// 与界面模式正交：标准版可用开关控制是否折射；简洁版一律关闭（省 GPU）
+function getLiquidGlass() {
+  const v = String(getRawSetting('liquid_glass', DEFAULT_SETTINGS.liquid_glass) || '').trim().toLowerCase();
+  return v !== 'false' && v !== '0';
+}
+
+function setLiquidGlass(on) {
+  setSetting('liquid_glass', on ? 'true' : 'false');
+  return !!on;
+}
+
 function setSettings(patch) {
   if (patch.shop_name !== undefined) setSetting('shop_name', String(patch.shop_name).trim() || DEFAULT_SETTINGS.shop_name);
   if (patch.theme) setTheme(patch.theme);
   if (patch.login_bg_rotate !== undefined) setLoginBgRotate(!!patch.login_bg_rotate);
   if (patch.ui_mode !== undefined) setUiMode(patch.ui_mode);
+  if (patch.liquid_glass !== undefined) setLiquidGlass(!!patch.liquid_glass);
   if (patch.operator_name !== undefined) setSetting('operator_name', String(patch.operator_name).trim() || DEFAULT_SETTINGS.operator_name);
   if (patch.points_rule) {
     const r = patch.points_rule;
@@ -895,6 +911,7 @@ module.exports = {
   fmtDateTime, fmtDate,
   getSettingsPublic, setSettings, setLoginBg, getLoginBg, getLoginBgList, setLoginBgList,
   getLoginBgRotate, setLoginBgRotate, getTheme, setTheme, getUiMode, setUiMode,
+  getLiquidGlass, setLiquidGlass,
   hasPassword, setupPasswords, verifyLogin, verifyOp, changePassword,
   isOpRequired, setOpPassword, clearOpPassword,
   getLoginUsername, setLoginUsername,

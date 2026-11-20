@@ -532,6 +532,7 @@ p { margin: 0; }
 .switch.on .switch-dot { background: var(--primary); }
 .switch.on .switch-dot::after { left: 20px; }
 .switch-label { font-size: 12.5px; color: var(--muted); }
+.switch.disabled { opacity: .5; cursor: not-allowed; }
 
 /* ============ 工作台 ============ */
 .dash { display: grid; gap: 14px; }
@@ -724,6 +725,8 @@ p { margin: 0; }
 .set-actions { display: flex; align-items: center; gap: 8px; margin-top: 6px; flex-wrap: wrap; }
 .rule-editor { display: grid; gap: 10px; margin-bottom: 12px; }
 .rule-line { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--ink-2); flex-wrap: wrap; }
+.rule-line > div { flex: 1 1 auto; min-width: 0; }
+.rule-line strong { display: block; margin-bottom: 3px; }
 .cloud-head { display: flex; align-items: center; gap: 14px; padding: 12px; border-radius: 10px; background: #F7FAFA; border: 1px solid var(--line); margin-bottom: 12px; }
 .cloud-head strong { font-size: 13.5px; }
 .db-path {
@@ -914,3 +917,45 @@ body.ui-lite .login-left { background: var(--nav-2); }
 }
 .ui-mode-card.active strong { color: var(--primary); }
 body.ui-lite .ui-mode-card { transition: none; }
+
+/* ============ 液态玻璃（独立开关，标准版内也可关） ============
+   原理：backdrop-filter 里挂 SVG 位移滤镜（feTurbulence → feDisplacementMap），
+   把玻璃后面的背景真正“掰弯”，做出透镜折射；再叠一层白色高光渐变和内侧高光边，
+   形成边缘通透、中心可读的玻璃质感。
+   只作用在浮层类表面（登录卡 / 弹窗 / 使用声明卡），主内容区保持不透明以便看清数字。
+   简洁版一律不生效（body.ui-lite 优先，见上方规则）。 */
+body.ui-liquid:not(.ui-lite) .login-card,
+body.ui-liquid:not(.ui-lite) .modal,
+body.ui-liquid:not(.ui-lite) .terms-card {
+  background:
+    radial-gradient(120% 90% at 14% 0%, rgba(255, 255, 255, .52) 0%, rgba(255, 255, 255, 0) 60%),
+    linear-gradient(158deg, rgba(255, 255, 255, .88) 0%, rgba(255, 255, 255, .70) 100%);
+  -webkit-backdrop-filter: blur(1.5px) saturate(1.55) brightness(1.06) url(#lg-refract);
+  backdrop-filter: blur(1.5px) saturate(1.55) brightness(1.06) url(#lg-refract);
+  border: 1px solid rgba(255, 255, 255, .68);
+  box-shadow:
+    0 26px 62px rgba(6, 28, 26, .30),
+    inset 0 1px 0 rgba(255, 255, 255, .95),
+    inset 0 -1px 0 rgba(8, 40, 36, .10);
+}
+/* 使用声明弹窗覆盖在背景图上，折射效果可以再强一点 */
+body.ui-liquid:not(.ui-lite) .terms-card {
+  -webkit-backdrop-filter: blur(2px) saturate(1.6) brightness(1.05) url(#lg-refract-strong);
+  backdrop-filter: blur(2px) saturate(1.6) brightness(1.05) url(#lg-refract-strong);
+}
+/* 弹窗遮罩也加一点折射，背景不会只是“糊一层灰” */
+body.ui-liquid:not(.ui-lite) .modal-mask {
+  -webkit-backdrop-filter: blur(4px) saturate(1.25) url(#lg-refract);
+  backdrop-filter: blur(4px) saturate(1.25) url(#lg-refract);
+  background: rgba(8, 26, 24, .34);
+}
+/* 主按钮与勾选行给一点玻璃高光边，和浮层呼应 */
+body.ui-liquid:not(.ui-lite) .btn-primary {
+  box-shadow: 0 6px 16px rgba(9, 80, 72, .22), inset 0 1px 0 rgba(255, 255, 255, .40);
+}
+body.ui-liquid:not(.ui-lite) .terms-consent {
+  background: rgba(255, 255, 255, .58);
+  -webkit-backdrop-filter: blur(1px) saturate(1.3);
+  backdrop-filter: blur(1px) saturate(1.3);
+}
+body.ui-liquid:not(.ui-lite) .terms-consent.on { background: rgba(231, 245, 242, .82); }

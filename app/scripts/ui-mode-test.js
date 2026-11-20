@@ -77,6 +77,21 @@ app.whenReady().then(async () => {
       out.viaSaveMode = viaSave.ok ? viaSave.data.ui_mode : 'ERR:' + viaSave.error;
       await api.settings.setUiMode('standard');
 
+      // 液态玻璃：独立开关，默认开启；可单独关掉且不需要操作密码；非法值不受影响
+      const lg0 = await api.settings.get();
+      out.liquidDefault = lg0.ok ? lg0.data.liquid_glass : 'ERR';
+      const lgOff = await api.settings.setLiquidGlass(false);
+      out.liquidOffOk = lgOff.ok;
+      out.liquidOffValue = lgOff.ok ? lgOff.data.liquid_glass : 'ERR:' + lgOff.error;
+      const lg1 = await api.settings.get();
+      out.liquidAfterOff = lg1.ok ? lg1.data.liquid_glass : 'ERR';
+      const st1 = await api.status();
+      out.statusLiquid = st1.ok ? st1.data.liquid_glass : 'ERR';
+      const lgOn = await api.settings.setLiquidGlass(true);
+      out.liquidOnOk = lgOn.ok;
+      const lg2 = await api.settings.get();
+      out.liquidAfterOn = lg2.ok ? lg2.data.liquid_glass : 'ERR';
+
       return out;
     })()
   `);
@@ -96,6 +111,13 @@ app.whenReady().then(async () => {
     backMode: 'standard',
     viaSaveOk: true,
     viaSaveMode: 'lite',
+    liquidDefault: true,
+    liquidOffOk: true,
+    liquidOffValue: false,
+    liquidAfterOff: false,
+    statusLiquid: false,
+    liquidOnOk: true,
+    liquidAfterOn: true,
   };
   let allPass = true;
   Object.entries(expect).forEach(([k, v]) => {

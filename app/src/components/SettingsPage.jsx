@@ -85,6 +85,8 @@ export default function SettingsPage({ settings, call, refresh, notify, elevated
 
   /* ---- 界面模式（标准版 / 简洁版），即时生效，不需要操作密码 ---- */
   const [uiMode, setUiMode] = useState('standard');
+  /* ---- 液态玻璃（与界面模式正交的独立开关） ---- */
+  const [liquid, setLiquid] = useState(true);
 
   useEffect(() => {
     if (!settings) return;
@@ -103,6 +105,7 @@ export default function SettingsPage({ settings, call, refresh, notify, elevated
     setAccent(normalizeAccent(settings.theme?.accent) || DEFAULT_ACCENT);
     savedAccentRef.current = normalizeAccent(settings.theme?.accent) || DEFAULT_ACCENT;
     setUiMode(settings.ui_mode === 'lite' ? 'lite' : 'standard');
+    setLiquid(settings.liquid_glass !== false);
   }, [settings]);
 
   async function pickUiMode(next) {
@@ -111,7 +114,20 @@ export default function SettingsPage({ settings, call, refresh, notify, elevated
     if (!r || r.ok === false) { notify((r && r.error) || '切换失败', 'err'); return; }
     setUiMode(next);
     document.body.classList.toggle('ui-lite', next === 'lite');
-    notify(next === 'lite' ? '已切换到简洁版：背景图与模糊动画已关闭' : '已切换到标准版：背景图与模糊过渡已恢复');
+    document.body.classList.toggle('ui-liquid', next !== 'lite' && liquid);
+    notify(next === 'lite' ? '已切换到简洁版：背景图、模糊与液态玻璃已关闭' : '已切换到标准版：背景图与模糊过渡已恢复');
+    refresh();
+  }
+
+  /* 液态玻璃开关：即时生效（只影响浮层表面，不重建界面） */
+  async function toggleLiquid(next) {
+    const r = await call(() => api.settings.setLiquidGlass(!!next));
+    if (!r || r.ok === false) { notify((r && r.error) || '保存失败', 'err'); return; }
+    setLiquid(!!next);
+    document.body.classList.toggle('ui-liquid', !!next && uiMode !== 'lite');
+    notify(next
+      ? '已开启液态玻璃：弹窗与卡片带折射高光'
+      : '已关闭液态玻璃：只保留普通毛玻璃，省一点显卡');
     refresh();
   }
 
@@ -395,6 +411,23 @@ export default function SettingsPage({ settings, call, refresh, notify, elevated
               <p className="io-note">
                 切换立即生效、自动保存，不需要操作密码。简洁版下背景图设置会保留但暂不显示，切回标准版即恢复。
               </p>
+            </Section>
+
+            <Section title="视觉效果" icon="spark" desc="液态玻璃：弹窗与卡片的折射高光">
+              <div className="rule-line">
+                <div>
+                  <strong>液态玻璃效果</strong>
+                  <p className="io-note" style={{ margin: 0 }}>
+                    登录卡、弹窗、使用声明卡带真实折射（背景被轻微“掰弯”）与玻璃高光；关掉后只保留普通毛玻璃，更省显卡。
+                  </p>
+                </div>
+                <Switch checked={liquid} onChange={toggleLiquid} disabled={uiMode === 'lite'} />
+              </div>
+              {uiMode === 'lite' ? (
+                <p className="io-note warn">简洁版固定关闭液态玻璃，保证低配电脑流畅。切到标准版后可自由开关。</p>
+              ) : (
+                <p className="io-note">与标准版/简洁版相互独立：标准版里也可以单独关掉折射，只留普通毛玻璃。</p>
+              )}
             </Section>
 
             <Section title="背景图" icon="image" desc="登录页与工作台共用，默认只显示第一张">

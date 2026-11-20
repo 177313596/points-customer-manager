@@ -64,6 +64,7 @@ const api = {
     removeLoginBg: (url) => call('settings:remove-login-bg', { url }),
     clearLoginBg: () => call('settings:clear-login-bg'),
     setUiMode: (mode) => call('settings:set-ui-mode', { mode }),
+    setLiquidGlass: (on) => call('settings:set-liquid-glass', { on }),
     clearData: () => call('settings:clear-data'),
   },
 

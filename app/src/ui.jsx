@@ -46,6 +46,28 @@ export function Icon({ name, size = 18, stroke = 1.7, className = '' }) {
   );
 }
 
+/** 液态玻璃折射滤镜定义。CSS 里用 backdrop-filter: url(#lg-refract) 引用，
+ *  由 feTurbulence + feDisplacementMap 把背景“掰弯”，做出真实透镜感而不是单纯模糊。
+ *  只挂一次即可（svg 宽高为 0，不占布局）。 */
+export function GlassDefs() {
+  return (
+    <svg width="0" height="0" aria-hidden="true" style={{ position: 'absolute', pointerEvents: 'none' }}>
+      <defs>
+        <filter id="lg-refract" x="-12%" y="-12%" width="124%" height="124%" colorInterpolationFilters="sRGB">
+          <feTurbulence type="fractalNoise" baseFrequency="0.0055 0.0085" numOctaves="2" seed="11" result="noise" />
+          <feGaussianBlur in="noise" stdDeviation="7" result="soft" />
+          <feDisplacementMap in="SourceGraphic" in2="soft" scale="24" xChannelSelector="R" yChannelSelector="G" />
+        </filter>
+        <filter id="lg-refract-strong" x="-14%" y="-14%" width="128%" height="128%" colorInterpolationFilters="sRGB">
+          <feTurbulence type="fractalNoise" baseFrequency="0.004 0.006" numOctaves="3" seed="5" result="noise" />
+          <feGaussianBlur in="noise" stdDeviation="10" result="soft" />
+          <feDisplacementMap in="SourceGraphic" in2="soft" scale="38" xChannelSelector="R" yChannelSelector="G" />
+        </filter>
+      </defs>
+    </svg>
+  );
+}
+
 /** 带“小眼睛”的密码输入框：点击右侧图标可切换显示/隐藏 */
 export function PasswordInput({
   value, onChange, placeholder, className = 'input input-lg',
@@ -139,9 +161,14 @@ export function Empty({ icon = 'database', title, desc, action }) {
   );
 }
 
-export function Switch({ checked, onChange, label }) {
+export function Switch({ checked, onChange, label, disabled = false }) {
   return (
-    <button type="button" className={'switch' + (checked ? ' on' : '')} onClick={() => onChange(!checked)}>
+    <button
+      type="button"
+      className={'switch' + (checked ? ' on' : '') + (disabled ? ' disabled' : '')}
+      disabled={disabled}
+      onClick={() => { if (!disabled) onChange(!checked); }}
+    >
       <span className="switch-dot" />
       {label ? <span className="switch-label">{label}</span> : null}
     </button>

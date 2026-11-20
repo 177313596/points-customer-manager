@@ -186,6 +186,7 @@ handle('auth:status', async () => ({
   login_bgs: db.getLoginBgList(),
   login_bg_rotate: db.getLoginBgRotate(),
   ui_mode: db.getUiMode(),
+  liquid_glass: db.getLiquidGlass(),
   theme: db.getTheme(),
   terms_accepted: db.getTermsAccepted(),
   op_required: db.isOpRequired(),
@@ -314,6 +315,9 @@ handle('settings:save', async (p) => db.setSettings(p.patch || {}), { elevated: 
 
 // 界面模式（标准版 / 简洁版）：纯显示偏好，不算敏感操作，只要求已登录、不要操作密码
 handle('settings:set-ui-mode', async (p) => ({ ui_mode: db.setUiMode(p && p.mode) }), { syncOnWrite: true });
+
+// 液态玻璃是纯视觉开关，和界面模式一样即时生效、不需要操作密码
+handle('settings:set-liquid-glass', async (p) => ({ liquid_glass: db.setLiquidGlass(!!(p && p.on)) }), { syncOnWrite: true });
 
 /* 登录页背景图（可多张）：图片本体写进 userData\login-bg\，库里只存 file:// 数组（避免大图撑爆数据库） */
 const BG_DIR = () => path.join(app.getPath('userData'), 'login-bg');
