@@ -74,7 +74,7 @@ const MODE_META = {
   newCustomer: { title: '新增顾客', icon: 'plus', verb: '保存顾客' },
 };
 
-export default function TxModal({ open, mode, customer, rules, onClose, onDone, call }) {
+export default function TxModal({ open, mode, customer, rules, onClose, onDone, call, opRequired = false }) {
   const [amount, setAmount] = useState('');
   const [times, setTimes] = useState(1);
   const [note, setNote] = useState('');
@@ -118,7 +118,7 @@ export default function TxModal({ open, mode, customer, rules, onClose, onDone, 
     } else if (mode === 'redeem') {
       r = await run(() => api.tx.redeem(customer.id, times, note));
     } else if (mode === 'adjust') {
-      r = await run(() => api.tx.adjust(customer.id, parseInt(dp || '0', 10) || 0, note, adjustPw));
+      r = await run(() => api.tx.adjust(customer.id, parseInt(dp || '0', 10) || 0, note, opRequired ? adjustPw : ''));
     } else if (mode === 'newCustomer') {
       r = await run(() => api.customers.create(form));
     }
@@ -135,7 +135,7 @@ export default function TxModal({ open, mode, customer, rules, onClose, onDone, 
       : mode === 'redeem'
         ? times > 0 && times <= maxTimes
         : mode === 'adjust'
-          ? dp !== '' && parseInt(dp, 10) !== 0 && adjustPw.trim().length > 0
+          ? dp !== '' && parseInt(dp, 10) !== 0 && (!opRequired || adjustPw.trim().length > 0)
           : !!form.name.trim();
 
   return (
@@ -256,9 +256,13 @@ export default function TxModal({ open, mode, customer, rules, onClose, onDone, 
             {dp !== '' && parseInt(dp || '0', 10) < 0 && Number(customer?.points || 0) + (parseInt(dp, 10) || 0) < 0 ? <strong className="warn">积分不足</strong> : null}
           </div>
           <Field label="调整原因（会写入记录）"><input className="input" value={note} onChange={(e) => setNote(e.target.value)} placeholder="如 补录上月消费积分" /></Field>
-          <Field label="操作密码 *" hint="手动调整不受 10 分钟授权窗口影响，每次都必须重新输入">
-            <PasswordInput value={adjustPw} onChange={(e) => setAdjustPw(e.target.value)} placeholder="请输入操作密码" className="input" />
-          </Field>
+          {opRequired ? (
+            <Field label="操作密码 *" hint="手动调整不受 10 分钟授权窗口影响，每次都必须重新输入">
+              <PasswordInput value={adjustPw} onChange={(e) => setAdjustPw(e.target.value)} placeholder="请输入操作密码" className="input" />
+            </Field>
+          ) : (
+            <p className="io-note">当前未启用二级操作密码，本次调整只用登录身份确认，无需再输密码。</p>
+          )}
         </>
       ) : null}
 

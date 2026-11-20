@@ -294,6 +294,7 @@ export default function Dashboard({ settings, overview, call, refresh, notify, b
         mode={modal || 'consume'}
         customer={modal === 'newCustomer' ? null : (modalCustomer || pick)}
         rules={settings}
+        opRequired={!!settings?.op_required}
         onClose={() => { setModal(null); setModalCustomer(null); }}
         call={call}
         onDone={(data, mode) => {

@@ -40,13 +40,18 @@ async function main() {
   /* ---- 登录后的桩数据，用于验证工作台渲染 ---- */
   const ok = (data) => ({ ok: true, data });
   ipcMain.handle('auth:login', () => ok({ token: 'tok' }));
+  // 二级操作密码：默认关闭，桩里用一个开关模拟设置页开/关
+  let opRequired = false;
   ipcMain.handle('settings:get', () => ok({
     shop_name: '积分客户管理系统', operator_name: '管理员',
     points_rule: { per_amount_cents: 1000, points_per_unit: 1 },
     redeem_rule: { points: 15, balance_cents: 1000 },
     cloud_config: { enabled: false }, login_username: '管理员',
     login_bg: bgUrl, login_bgs: [bgUrl], login_bg_rotate: false, theme: { accent: '#0F766E' },
+    op_required: opRequired,
   }));
+  ipcMain.handle('auth:set-op-password', () => { opRequired = true; return ok({ op_required: true }); });
+  ipcMain.handle('auth:disable-op', () => { opRequired = false; return ok({ op_required: false }); });
   ipcMain.handle('stats:overview', () => ok({
     customers: 2, today_amount_cents: 0, today_tx_count: 0, today_points: 0,
     today_new_customers: 0, total_points: 35, total_balance_cents: 1250,
@@ -100,37 +105,38 @@ async function main() {
       if (!g) return JSON.stringify({ gate: 0 });
       const sections = g.querySelectorAll('.terms-sec').length;
       const textLen = g.querySelector('.terms-body') ? g.querySelector('.terms-body').innerText.length : 0;
-      const chk0 = g.querySelector('.terms-consent input');
+      const chk0 = g.querySelector('.terms-consent');
       const btn0 = g.querySelector('.terms-foot .btn');
-      const lockedChk = chk0.disabled;
-      const lockedBtn = btn0.disabled;
+      const lockedChk = chk0.getAttribute('aria-disabled') === 'true' && chk0.classList.contains('locked');
+      const lockedBtn = btn0.getAttribute('aria-disabled') === 'true';
       const btnTextBefore = btn0.textContent.trim();
       const timerText = g.querySelector('.terms-timer') ? g.querySelector('.terms-timer').textContent.trim() : '';
-      chk0.click();                        // 锁定期间点勾选框应无效
+      chk0.click();                        // 锁定期间点勾选行：不勾上，只出提示
       await wait(300);
-      const checkedWhileLocked = document.querySelector('.terms-consent input').checked;
+      const checkedWhileLocked = document.querySelector('.terms-consent').getAttribute('aria-checked') === 'true';
+      const hintWhileLocked = (document.querySelector('.terms-hint') || {}).textContent || '';
 
       // 等倒计时走完（最多 14 秒）
       let waited = 0;
       while (waited < 14000) {
-        const c = document.querySelector('.terms-consent input');
-        if (c && !c.disabled) break;
+        const c = document.querySelector('.terms-consent');
+        if (c && !c.classList.contains('locked')) break;
         await wait(500);
         waited += 500;
       }
-      const chk1 = document.querySelector('.terms-consent input');
-      const unlocked = chk1 && !chk1.disabled;
+      const chk1 = document.querySelector('.terms-consent');
+      const unlocked = chk1 && !chk1.classList.contains('locked');
       const timerAfter = document.querySelector('.terms-timer') ? document.querySelector('.terms-timer').textContent.trim() : '';
       chk1.click();
       await wait(350);
       const btn1 = document.querySelector('.terms-gate .terms-foot .btn');
-      const disabledAfter = btn1 ? btn1.disabled : null;
+      const disabledAfter = btn1 ? btn1.getAttribute('aria-disabled') === 'true' : null;
       const btnTextAfter = btn1 ? btn1.textContent.trim() : '';
       if (btn1) btn1.click();
       await wait(700);
       return JSON.stringify({
         gate: 1, lockedChk, lockedBtn, btnTextBefore, timerText,
-        checkedWhileLocked, unlocked, waitMs: waited, timerAfter,
+        checkedWhileLocked, hintWhileLocked, unlocked, waitMs: waited, timerAfter,
         disabledAfter, btnTextAfter, sections, textLen,
         gone: !document.querySelector('.terms-gate'),
       });
@@ -144,6 +150,7 @@ async function main() {
     termsGateShown: gateObj.gate === 1,
     termsCountdownStart: /还需阅读 (\d+) 秒/.test(String(gateObj.timerText || '')),
     termsCheckboxLocked: gateObj.lockedChk === true && gateObj.checkedWhileLocked === false,
+    termsLockedClickShowsHint: /还需阅读/.test(String(gateObj.hintWhileLocked || '')),
     termsAgreeLocked: gateObj.lockedBtn === true && /请阅读声明（(\d+) 秒后可同意）/.test(String(gateObj.btnTextBefore || '')),
     termsCheckboxUnlocksAfter10s: gateObj.unlocked === true && Number(gateObj.waitMs || 0) >= 7000 && Number(gateObj.waitMs || 0) <= 12000,
     termsGateEnablesAfterCheck: gateObj.disabledAfter === false,
@@ -600,25 +607,57 @@ async function main() {
   const pwRes = await win.webContents.executeJavaScript(`
     (async () => {
       const wait = (ms) => new Promise((r) => setTimeout(r, ms));
-      const sel = [...document.querySelectorAll('select.select')].find((s) => [...s.options].some((o) => o.textContent.includes('操作密码')));
-      if (!sel) return 'no-select';
+      const out = {};
       const labels = () => [...document.querySelectorAll('.field-label')].map((l) => l.textContent.trim());
-      const before = labels();
-      sel.value = 'op';
-      sel.dispatchEvent(new Event('change', { bubbles: true }));
+      const setVal = (el, v) => {
+        const d = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+        d.call(el, v);
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+      };
+
+      // 1) 默认关闭：修改密码里不应出现「操作密码」，页面上应有「启用」按钮
+      const selAny = [...document.querySelectorAll('select.select')].find((s) => [...s.options].some((o) => o.textContent.includes('密码')));
+      out.hasSel = !!selAny;
+      out.onlyLoginBefore = !!selAny && ![...selAny.options].some((o) => o.textContent.trim() === '操作密码');
+      out.hasEnableBtn = [...document.querySelectorAll('button')].some((b) => b.textContent.trim() === '启用');
+
+      // 2) 点「启用」→ 弹窗填两次密码 → 确认启用
+      const en = [...document.querySelectorAll('button')].find((b) => b.textContent.trim() === '启用');
+      if (en) en.click();
       await wait(500);
-      const afterOp = labels();
-      sel.value = 'login';
-      sel.dispatchEvent(new Event('change', { bubbles: true }));
-      await wait(500);
-      const afterLogin = labels();
-      return JSON.stringify({
-        beforeHasLogin: before.includes('当前登录密码'),
-        opHasOp: afterOp.includes('当前操作密码'),
-        opNoLogin: !afterOp.includes('当前登录密码'),
-        backHasLogin: afterLogin.includes('当前登录密码'),
-        hasPwEyes: document.querySelectorAll('.set-card .pw-eye').length,
-      });
+      const modal = document.querySelector('.modal');
+      out.modalOpened = !!modal;
+      if (modal) {
+        const ins = [...modal.querySelectorAll('input')];
+        if (ins[0]) setVal(ins[0], 'op456');
+        if (ins[1]) setVal(ins[1], 'op456');
+        await wait(300);
+        const okBtn = [...modal.querySelectorAll('.modal-foot .btn')].find((b) => b.textContent.trim() === '启用');
+        out.confirmFound = !!okBtn;
+        if (okBtn) okBtn.click();
+      }
+      await wait(1000);
+      out.modalClosed = !document.querySelector('.modal');
+      out.errText = (document.querySelector('.modal .err') || {}).textContent || '';
+
+      // 3) 启用后 select 里出现「操作密码」，切换时标签联动
+      const sel = [...document.querySelectorAll('select.select')].find((s) => [...s.options].some((o) => o.textContent.includes('操作密码')));
+      out.hasOpOption = !!sel;
+      if (sel) {
+        out.beforeHasLogin = labels().includes('当前登录密码');
+        sel.value = 'op';
+        sel.dispatchEvent(new Event('change', { bubbles: true }));
+        await wait(500);
+        const afterOp = labels();
+        out.opHasOp = afterOp.includes('当前操作密码');
+        out.opNoLogin = !afterOp.includes('当前登录密码');
+        sel.value = 'login';
+        sel.dispatchEvent(new Event('change', { bubbles: true }));
+        await wait(500);
+        out.backHasLogin = labels().includes('当前登录密码');
+      }
+      out.hasPwEyes = document.querySelectorAll('.set-card .pw-eye').length;
+      return JSON.stringify(out);
     })()
   `).catch((e) => 'err:' + e.message);
   let pwObj = {};
@@ -626,6 +665,10 @@ async function main() {
   log('pw labels: ' + pwRes);
 
   const pwChecks = {
+    hasPasswordSelect: pwObj.hasSel === true,
+    opOffByDefault: pwObj.onlyLoginBefore === true && pwObj.hasEnableBtn === true,
+    opEnableModalOpens: pwObj.modalOpened === true && pwObj.confirmFound === true,
+    opEnableTakesEffect: pwObj.modalClosed === true && pwObj.hasOpOption === true,
     labelBeforeLogin: pwObj.beforeHasLogin === true,
     labelSwitchesToOp: pwObj.opHasOp === true && pwObj.opNoLogin === true,
     labelSwitchesBack: pwObj.backHasLogin === true,

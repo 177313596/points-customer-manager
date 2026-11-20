@@ -21,13 +21,18 @@ const TABS = [
   { key: 'basic', label: '基础信息', icon: 'grid', desc: '店铺名称与操作人' },
   { key: 'appearance', label: '外观与背景', icon: 'image', desc: '背景图 / 个性化配色' },
   { key: 'rules', label: '积分规则', icon: 'spark', desc: '累积与兑换比例' },
-  { key: 'security', label: '安全设置', icon: 'shield', desc: '用户名与两套密码' },
+  { key: 'security', label: '安全设置', icon: 'shield', desc: '用户名 / 登录密码 / 可选二级密码' },
   { key: 'cloud', label: '云端同步', icon: 'cloud', desc: '本地优先，可随时关闭' },
   { key: 'data', label: '数据与备份', icon: 'database', desc: '单文件数据库与清空' },
 ];
 
-export default function SettingsPage({ settings, call, refresh, notify, elevatedUntil }) {
+export default function SettingsPage({ settings, call, refresh, notify, elevatedUntil, initialTab }) {
   const [tab, setTab] = useState('basic');
+
+  // 从登录页「现在去设置」跳转进来时，直接落到安全设置
+  useEffect(() => {
+    if (initialTab && TABS.some((t) => t.key === initialTab)) setTab(initialTab);
+  }, [initialTab]);
 
   const [shop, setShop] = useState('');
   const [operator, setOperator] = useState('');
@@ -50,6 +55,20 @@ export default function SettingsPage({ settings, call, refresh, notify, elevated
   const [newPw, setNewPw] = useState('');
   const [newPw2, setNewPw2] = useState('');
   const [pwErr, setPwErr] = useState('');
+
+  /* ---- 二级操作密码（默认关闭，可在这里开启 / 关闭）---- */
+  const opOn = !!(settings && settings.op_required);
+  const [opEnableOpen, setOpEnableOpen] = useState(false);
+  const [opDisableOpen, setOpDisableOpen] = useState(false);
+  const [opNew, setOpNew] = useState('');
+  const [opNew2, setOpNew2] = useState('');
+  const [opOld, setOpOld] = useState('');
+  const [opErr, setOpErr] = useState('');
+
+  // 操作密码被关闭后，「修改哪套密码」不能停在“操作密码”上
+  useEffect(() => {
+    if (!(settings && settings.op_required) && pwKind === 'op') setPwKind('login');
+  }, [settings && settings.op_required, pwKind]);
 
   const [info, setInfo] = useState(null);
   const [clearOpen, setClearOpen] = useState(false);
@@ -263,6 +282,7 @@ export default function SettingsPage({ settings, call, refresh, notify, elevated
 
   async function changePw() {
     setPwErr('');
+    if (pwKind === 'op' && !opOn) return setPwErr('当前未启用操作密码，请点上方「启用」先设置一个');
     if (!oldPw.trim()) return setPwErr(pwKind === 'op' ? '请输入当前操作密码' : '请输入当前登录密码');
     if (newPw.length < 4) return setPwErr('新密码至少 4 位');
     if (newPw !== newPw2) return setPwErr('两次输入不一致');
@@ -271,6 +291,28 @@ export default function SettingsPage({ settings, call, refresh, notify, elevated
     if (!r.ok) return setPwErr(r.error);
     setOldPw(''); setNewPw(''); setNewPw2('');
     notify(pwKind === 'login' ? '登录密码已修改，下次登录请用新密码' : '操作密码已修改，下次敏感操作用新密码');
+  }
+
+  /* ---- 启用 / 关闭二级操作密码 ---- */
+  async function enableOp() {
+    setOpErr('');
+    if (opNew.length < 4) return setOpErr('操作密码至少 4 位');
+    if (opNew !== opNew2) return setOpErr('两次输入不一致');
+    const r = await call(() => api.setOpPassword(opNew));
+    if (!r.ok) return setOpErr(r.error);
+    setOpEnableOpen(false); setOpNew(''); setOpNew2('');
+    notify('操作密码已启用，敏感操作需先验证');
+    refresh();
+  }
+
+  async function disableOp() {
+    setOpErr('');
+    if (!opOld.trim()) return setOpErr('请输入当前操作密码');
+    const r = await call(() => api.disableOp(opOld));
+    if (!r.ok) return setOpErr(r.error);
+    setOpDisableOpen(false); setOpOld('');
+    notify('操作密码已关闭，敏感操作不再需要二次验证');
+    refresh();
   }
 
   async function saveUsername() {
@@ -533,7 +575,30 @@ export default function SettingsPage({ settings, call, refresh, notify, elevated
         ) : null}
 
         {tab === 'security' ? (
-          <Section title="安全设置" icon="shield" desc="用户名 + 登录密码进门，操作密码管敏感操作">
+          <Section title="安全设置" icon="shield" desc="登录密码进门；操作密码可选，默认关闭">
+            <div className="form-grid">
+              <Field
+                label="二级操作密码（可选）"
+                hint="默认关闭。开启后，消费、兑换、导入、修改设置等敏感操作需先输入一次操作密码（10 分钟内有效）；手动调整积分每次都需输入。"
+              >
+                <div className="field-inline">
+                  <span className="field-hint">{opOn ? '已启用：敏感操作需二次验证' : '未启用：仅用登录密码保护'}</span>
+                  {opOn ? (
+                    <button
+                      className="btn btn-ghost"
+                      type="button"
+                      onClick={() => { setOpOld(''); setOpErr(''); setOpDisableOpen(true); }}
+                    >关闭</button>
+                  ) : (
+                    <button
+                      className="btn btn-primary"
+                      type="button"
+                      onClick={() => { setOpNew(''); setOpNew2(''); setOpErr(''); setOpEnableOpen(true); }}
+                    >启用</button>
+                  )}
+                </div>
+              </Field>
+            </div>
             <div className="form-grid">
               <Field label="登录用户名" hint="登录时需与此一致，最多 20 个字符">
                 <div className="field-inline">
@@ -550,7 +615,7 @@ export default function SettingsPage({ settings, call, refresh, notify, elevated
                   onChange={(e) => { setPwKind(e.target.value); setOldPw(''); setPwErr(''); }}
                 >
                   <option value="login">登录密码</option>
-                  <option value="op">操作密码</option>
+                  {opOn ? <option value="op">操作密码</option> : null}
                 </select>
               </Field>
               <Field label={pwKind === 'op' ? '当前操作密码' : '当前登录密码'} hint={pwKind === 'op' ? '改完立即生效，下次敏感操作要用新密码' : '改完立即生效，下次登录要用新密码'}>
@@ -574,8 +639,10 @@ export default function SettingsPage({ settings, call, refresh, notify, elevated
             </div>
             {elevatedLeft > 0 ? (
               <p className="io-note">当前已开启操作授权，剩余 {Math.floor(elevatedLeft / 60)} 分 {elevatedLeft % 60} 秒。</p>
-            ) : (
+            ) : opOn ? (
               <p className="io-note">操作授权未开启：敏感操作会临时弹出操作密码校验。</p>
+            ) : (
+              <p className="io-note">当前未启用操作密码：敏感操作只校验登录状态，不会二次验证。</p>
             )}
           </Section>
         ) : null}
@@ -620,6 +687,47 @@ export default function SettingsPage({ settings, call, refresh, notify, elevated
         <Field label="请输入「清空」以确认">
           <input className="input" value={clearWord} onChange={(e) => setClearWord(e.target.value)} placeholder="清空" />
         </Field>
+      </Modal>
+      {/* 启用二级操作密码 */}
+      <Modal
+        open={opEnableOpen}
+        title="启用二级操作密码"
+        subtitle="开启后敏感操作需输入一次，10 分钟内有效"
+        onClose={() => setOpEnableOpen(false)}
+        footer={(
+          <>
+            <button className="btn btn-ghost" onClick={() => setOpEnableOpen(false)} type="button">取消</button>
+            <button className="btn btn-primary" onClick={enableOp} type="button">启用</button>
+          </>
+        )}
+      >
+        <Field label="设置操作密码" hint="至少 4 位，不能与登录密码相同">
+          <PasswordInput value={opNew} onChange={(e) => setOpNew(e.target.value)} placeholder="输入操作密码" className="input" />
+        </Field>
+        <Field label="确认操作密码">
+          <PasswordInput value={opNew2} onChange={(e) => setOpNew2(e.target.value)} placeholder="再输入一次" className="input" />
+        </Field>
+        {opErr ? <div className="err"><Icon name="alert" size={14} />{opErr}</div> : null}
+      </Modal>
+
+      {/* 关闭二级操作密码：必须验证当前操作密码 */}
+      <Modal
+        open={opDisableOpen}
+        title="关闭二级操作密码"
+        subtitle="关闭后敏感操作不再需要二次验证"
+        onClose={() => setOpDisableOpen(false)}
+        footer={(
+          <>
+            <button className="btn btn-ghost" onClick={() => setOpDisableOpen(false)} type="button">取消</button>
+            <button className="btn btn-danger" onClick={disableOp} type="button">确认关闭</button>
+          </>
+        )}
+      >
+        <p className="confirm-text">关闭后，消费、兑换、导入、改设置等操作只校验登录状态。之后可随时在这里重新启用。</p>
+        <Field label="当前操作密码">
+          <PasswordInput value={opOld} onChange={(e) => setOpOld(e.target.value)} placeholder="请输入当前操作密码" className="input" />
+        </Field>
+        {opErr ? <div className="err"><Icon name="alert" size={14} />{opErr}</div> : null}
       </Modal>
     </div>
   );

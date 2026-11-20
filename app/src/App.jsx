@@ -24,6 +24,7 @@ export default function App() {
   const [settings, setSettings] = useState(null);
   const [overview, setOverview] = useState(null);
   const [page, setPage] = useState('dashboard');
+  const [settingsTab, setSettingsTab] = useState(''); // 从登录页「去设置操作密码」跳进来时用
   const [bump, setBump] = useState(0);
   const [toast, setToast] = useState(null);
   const [opOpen, setOpOpen] = useState(false);
@@ -146,11 +147,15 @@ export default function App() {
   }, [authed]);
 
   if (boot) return <><div className="splash"><div className="loading-dot" /></div><WinChrome /></>;
-  if (!authed) return <><Login onAuthed={() => setAuthed(true)} /><WinChrome /></>;
+  if (!authed) return <><Login onAuthed={(opts) => {
+    setAuthed(true);
+    if (opts && opts.page) { setPage(opts.page); setSettingsTab(opts.tab || ''); }
+  }} /><WinChrome /></>;
 
   const meta = PAGES.find((p) => p.key === page);
   const elevatedLeft = Math.max(0, Math.floor((elevatedUntil - nowTs) / 1000));
   const cloudOn = settings?.cloud_config?.enabled;
+  const opRequired = !!(settings && settings.op_required);
 
   return (
     <>
@@ -166,7 +171,10 @@ export default function App() {
 
         <nav className="side-nav">
           {PAGES.map((p) => (
-            <button key={p.key} className={'nav-item' + (page === p.key ? ' active' : '')} onClick={() => setPage(p.key)}>
+            <button key={p.key} className={'nav-item' + (page === p.key ? ' active' : '')} onClick={() => {
+              if (p.key === 'settings') setSettingsTab('');
+              setPage(p.key);
+            }}>
               <Icon name={p.icon} size={17} />
               <span>{p.label}</span>
               {p.key === 'dashboard' && overview?.pending_sync > 0 ? <em className="dot-badge">{overview.pending_sync}</em> : null}
@@ -216,6 +224,10 @@ export default function App() {
             </button>
             {elevatedLeft > 0 ? (
               <span className="chip chip-accent"><Icon name="shield" size={14} />操作授权 {Math.floor(elevatedLeft / 60)}:{String(elevatedLeft % 60).padStart(2, '0')}</span>
+            ) : !opRequired ? (
+              <button className="chip" onClick={() => { setSettingsTab('security'); setPage('settings'); }} title="二级操作密码默认关闭，可在设置里开启">
+                <Icon name="lock" size={14} />未启用操作密码
+              </button>
             ) : (
               <button className="chip" onClick={async () => { const ok = await askOp(); if (ok) notify('操作授权已开启'); }}>
                 <Icon name="lock" size={14} />未开启操作授权
@@ -240,7 +252,7 @@ export default function App() {
               <DataIO call={call} refresh={refresh} notify={notify} />
             ) : null}
             {page === 'settings' ? (
-              <SettingsPage settings={settings} call={call} refresh={refresh} notify={notify} elevatedUntil={elevatedUntil} />
+              <SettingsPage settings={settings} call={call} refresh={refresh} notify={notify} elevatedUntil={elevatedUntil} initialTab={settingsTab} />
             ) : null}
           </div>
         </div>

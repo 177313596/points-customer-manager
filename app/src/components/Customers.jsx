@@ -137,7 +137,7 @@ export default function Customers({ settings, call, refresh, notify, bump }) {
                         <button className="icon-btn" title="消费余额" onClick={() => { setPick(c); setTxMode('balance'); }}><Icon name="wallet" size={15} /></button>
                         <button className="icon-btn" title="转化积分" onClick={() => { setPick(c); setTxMode('consume'); }}><Icon name="spark" size={15} /></button>
                         <button className="icon-btn" title="积分兑换" onClick={() => { setPick(c); setTxMode('redeem'); }}><Icon name="gift" size={15} /></button>
-                        <button className="icon-btn" title="手动调整（需操作密码）" onClick={() => { setPick(c); setTxMode('adjust'); }}><Icon name="settings" size={15} /></button>
+                        <button className="icon-btn" title={settings?.op_required ? '手动调整（需操作密码）' : '手动调整'} onClick={() => { setPick(c); setTxMode('adjust'); }}><Icon name="settings" size={15} /></button>
                         <button className="icon-btn" title="编辑" onClick={() => openEdit(c)}><Icon name="edit" size={15} /></button>
                         <button className="icon-btn danger" title="删除" onClick={() => { setConfirmDel(c); setErr(''); }}><Icon name="trash" size={15} /></button>
                       </div>
@@ -163,6 +163,7 @@ export default function Customers({ settings, call, refresh, notify, bump }) {
         mode={txMode || 'consume'}
         customer={txMode === 'newCustomer' ? null : pick}
         rules={settings}
+        opRequired={!!settings?.op_required}
         onClose={() => setTxMode(null)}
         call={call}
         onDone={() => { notify('操作完成'); refresh(); }}

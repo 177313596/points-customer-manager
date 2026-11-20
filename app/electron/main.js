@@ -26,7 +26,8 @@ function handle(channel, fn, opt = {}) {
           return { ok: false, error: '未登录或会话已失效，请重新登录', code: 'UNAUTH' };
         }
       }
-      if (opt.elevated && Date.now() > elevatedUntil) {
+      // 未启用操作密码（二级密码）时，敏感操作不再要求 10 分钟授权
+      if (opt.elevated && db.isOpRequired() && Date.now() > elevatedUntil) {
         return { ok: false, error: '操作密码授权已过期，请重新验证', code: 'NEED_OP' };
       }
       const data = await fn(p);
@@ -176,6 +177,7 @@ handle('auth:status', async () => ({
   ui_mode: db.getUiMode(),
   theme: db.getTheme(),
   terms_accepted: db.getTermsAccepted(),
+  op_required: db.isOpRequired(),
   version: app.getVersion(),
 }), { public: true });
 
@@ -202,10 +204,30 @@ handle('auth:login', async (p) => {
 handle('auth:set-username', async (p) => db.setLoginUsername(p.username), { elevated: true, syncOnWrite: true });
 
 handle('auth:verify-op', async (p) => {
+  if (!db.isOpRequired()) throw new Error('未启用操作密码，无需验证');
   if (!db.verifyOp(p.password)) throw new Error('操作密码错误');
   elevatedUntil = Date.now() + ELEVATION_MS;
   return { elevatedUntil, elevationMs: ELEVATION_MS };
 });
+
+// 设置页启用操作密码（二级密码）：直接设一个新密码并立刻开启
+handle('auth:set-op-password', async (p) => {
+  const pw = String(p.password || '');
+  if (!pw.trim()) throw new Error('请输入操作密码');
+  db.setOpPassword(pw);
+  elevatedUntil = Date.now() + ELEVATION_MS;
+  return { op_required: true, elevatedUntil, elevationMs: ELEVATION_MS };
+}, { syncOnWrite: true });
+
+// 设置页关闭操作密码：必须输入当前操作密码确认，关闭后敏感操作不再二次验证
+handle('auth:disable-op', async (p) => {
+  if (!db.isOpRequired()) return { op_required: false };
+  if (!String(p.password || '').trim()) throw new Error('请输入当前操作密码');
+  if (!db.verifyOp(p.password)) throw new Error('操作密码错误');
+  db.clearOpPassword();
+  elevatedUntil = 0;
+  return { op_required: false };
+}, { syncOnWrite: true });
 
 handle('auth:change-password', async (p) => {
   const kind = p.kind === 'op' ? 'op' : 'login';
@@ -216,6 +238,7 @@ handle('auth:change-password', async (p) => {
   if (!oldPw) throw new Error(kind === 'op' ? '请输入当前操作密码' : '请输入当前登录密码');
   // 校验的是“原密码”，按修改的类型分别验：登录密码带上用户名（verifyLogin 是两参数）
   if (kind === 'op') {
+    if (!db.isOpRequired()) throw new Error('当前未启用操作密码，请先启用');
     if (!db.verifyOp(oldPw)) throw new Error('当前操作密码错误');
   } else if (!db.verifyLogin(db.getLoginUsername(), oldPw)) {
     throw new Error('当前登录密码错误');
@@ -247,10 +270,12 @@ handle('tx:consume', async (p) => db.createConsume({ ...p, operator: db.getSetti
 // 消费余额：只扣余额、不加积分
 handle('tx:spend', async (p) => db.createBalanceSpend({ customer_id: p.customer_id, amount_cents: p.amount_cents, note: p.note, operator: db.getSettingsPublic().operator_name }), { elevated: true, syncOnWrite: true });
 handle('tx:redeem', async (p) => db.redeemPoints({ ...p, operator: db.getSettingsPublic().operator_name }), { elevated: true, syncOnWrite: true });
-// 手动调整：不受 10 分钟操作授权窗口影响，每次都必须当次输入操作密码；且**不允许改余额**
+// 手动调整：启用操作密码时，每次都必须当次输入操作密码；未启用时直接放行。且**不允许改余额**
 handle('tx:adjust', async (p) => {
-  if (!String(p.op_password || '').trim()) throw new Error('请输入操作密码');
-  if (!db.verifyOp(p.op_password)) throw new Error('操作密码错误');
+  if (db.isOpRequired()) {
+    if (!String(p.op_password || '').trim()) throw new Error('请输入操作密码');
+    if (!db.verifyOp(p.op_password)) throw new Error('操作密码错误');
+  }
   if (Number(p.balance_delta_cents || 0) !== 0) throw new Error('余额不支持手动修改，请使用「消费余额」或「积分兑换」');
   return db.adjustCustomer({
     customer_id: p.customer_id,

@@ -7,14 +7,14 @@ export const TERMS_SECTIONS = [
   {
     head: '一、软件说明',
     items: [
-      '本软件是基于 React + Bolt Database 的本地桌面积分管理工具，提供顾客登记、积分核算、积分兑换、消费余额、消费记录、Excel/CSV 批量导入导出、双重密码管控与可选云端同步，仅用于内部经营登记。',
+      '本软件是基于 React + Bolt Database 的本地桌面积分管理工具，提供顾客登记、积分核算、积分兑换、消费余额、消费记录、Excel/CSV 批量导入导出、可选二级密码管控与可选云端同步，仅用于内部经营登记。',
       '积分规则：每满 10 元积 1 分；15 分兑换 10 元消费余额。余额只能靠积分兑换增加、只能靠消费余额减少，不支持手动改余额。',
     ],
   },
   {
     head: '二、使用须知',
     items: [
-      '账号与密码：系统含登录密码、操作密码两套。登录密码进门，操作密码管积分调整、积分兑换、手动调整等敏感操作。密码由使用者自行保管，因泄露、转借或保管不当造成的篡改与误操作，后果由使用方承担。',
+      '账号与密码：系统默认只设登录密码（含用户名），用于进入系统；二级操作密码为可选项，默认关闭，可在「设置 → 安全设置」开启，开启后管积分调整、积分兑换、消费余额、导入、改设置等敏感操作。密码由使用者自行保管，因泄露、转借或保管不当造成的篡改与误操作，后果由使用方承担。',
       '数据与备份：支持本地保存 + 可选云端同步；请定期用「导出名单 / 备份到文件」自行备份，云端同步不等于免备份。因网络异常、云端服务波动、误删除造成的数据丢失，开发者不承担赔偿责任。',
       '导入校验：批量导入 Excel/CSV 会直接写入数据库，请先核对文件内容，错误导入产生的后果由操作人负责。',
       '操作凭证：消费、兑换、调整等记录精确到秒永久留存，作为操作凭证，提交前请确认顾客、数量与金额无误。',
@@ -75,6 +75,7 @@ export default function TermsGate({ onAccepted }) {
   const [checked, setChecked] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
+  const [hint, setHint] = useState('');
   const [left, setLeft] = useState(READ_SECONDS);
 
   useEffect(() => {
@@ -85,13 +86,37 @@ export default function TermsGate({ onAccepted }) {
 
   const locked = left > 0;
 
+  /* 倒计时结束自动清掉“还需阅读”提示 */
+  useEffect(() => {
+    if (!locked) setHint('');
+  }, [locked]);
+
+  /* 勾选区：始终可点击。倒计时内点它不再静默无反应，而是提示还差几秒 */
+  function toggleConsent() {
+    if (locked) { setHint(`还需阅读 ${left} 秒，读完后即可勾选同意`); return; }
+    setHint('');
+    setChecked((v) => !v);
+  }
+
   async function agree() {
-    if (!checked || busy || locked) return;
+    if (busy) return;
+    if (locked) { setHint(`还需阅读 ${left} 秒，读完后即可同意`); return; }
+    if (!checked) { setHint('请先勾选左侧方框，确认已阅读《使用声明》'); return; }
+    setErr('');
+    setHint('');
     setBusy(true);
     const r = await api.acceptTerms(new Date().toISOString());
     setBusy(false);
     if (!r || !r.ok) { setErr((r && r.error) || '保存失败，请重试'); return; }
     onAccepted((r.data && r.data.terms_accepted) || 'ok');
+  }
+
+  const ready = !locked && checked && !busy;
+
+  /* 底部整块（含按钮左右两侧留白）都可点击，避免“按钮左边一小段点不动” */
+  function onFootClick(e) {
+    if (e.target && e.target.closest && e.target.closest('.btn')) return;
+    agree();
   }
 
   return (
@@ -107,21 +132,32 @@ export default function TermsGate({ onAccepted }) {
         </div>
         <TermsBody />
         {err ? <div className="err"><Icon name="alert" size={14} />{err}</div> : null}
-        <label className={'terms-consent' + (locked ? ' locked' : '')}>
-          <input
-            type="checkbox"
-            checked={checked}
-            disabled={locked}
-            onChange={(e) => setChecked(e.target.checked)}
-          />
+        {/* 自定义勾选区：整行都能点，方框本体加大到 20px 并外扩热区；
+            不用原生 checkbox + disabled，避免禁用态把鼠标事件吞掉 */}
+        <div
+          className={'terms-consent' + (locked ? ' locked' : '') + (checked ? ' on' : '')}
+          role="checkbox"
+          aria-checked={checked}
+          aria-disabled={locked}
+          tabIndex={0}
+          onClick={toggleConsent}
+          onKeyDown={(e) => {
+            if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); toggleConsent(); }
+          }}
+        >
+          <span className={'terms-box' + (checked ? ' on' : '')} aria-hidden="true">
+            {checked ? <Icon name="check" size={12} /> : null}
+          </span>
           <span>
             {locked
               ? `请先阅读声明，${left} 秒后才能勾选同意`
               : '我已阅读并同意上述《使用声明》，知悉积分/余额规则、数据备份责任与禁止事项'}
           </span>
-        </label>
-        <div className="terms-foot">
-          <button type="button" className="btn btn-primary btn-block" onClick={agree} disabled={locked || !checked || busy}>
+        </div>
+        {/* 提示条固定占位（空时不可见），避免弹出提示时整张卡片上下跳动 */}
+        <div className={'terms-hint' + (hint ? '' : ' is-empty')}>{hint || ' '}</div>
+        <div className="terms-foot" onClick={onFootClick}>
+          <button type="button" className={'btn btn-primary btn-block' + (ready ? '' : ' is-idle')} aria-disabled={!ready} onClick={agree}>
             {busy ? '正在保存…' : locked ? `请阅读声明（${left} 秒后可同意）` : checked ? '同意并继续' : '请先勾选同意'}
           </button>
         </div>

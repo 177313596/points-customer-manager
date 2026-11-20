@@ -25,6 +25,8 @@ const api = {
   login: (username, password) => authCall('auth:login', { username, password }),
   logout: () => { const r = call('auth:logout'); token = ''; return r; },
   verifyOp: (password) => call('auth:verify-op', { password }),
+  setOpPassword: (password) => call('auth:set-op-password', { password }),
+  disableOp: (password) => call('auth:disable-op', { password }),
   changePassword: (kind, oldPassword, newPassword) => call('auth:change-password', { kind, oldPassword, newPassword }),
   setUsername: (username) => call('auth:set-username', { username }),
   acceptTerms: (when) => call('auth:accept-terms', { when }),

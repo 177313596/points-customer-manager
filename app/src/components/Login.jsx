@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { api } from '../utils';
-import { Icon, PasswordInput } from '../ui';
+import { Icon, PasswordInput, Modal } from '../ui';
 import TermsGate, { TermsBody } from './TermsGate';
 import { applyTheme } from '../theme';
 import brandLogo from '../assets/brand-logo.png';
@@ -16,8 +16,7 @@ export default function Login({ onAuthed }) {
   const [loginUser, setLoginUser] = useState('');
   const [pw, setPw] = useState('');
   const [pw2, setPw2] = useState('');
-  const [opPw, setOpPw] = useState('');
-  const [opPw2, setOpPw2] = useState('');
+  const [setupDone, setSetupDone] = useState(false); // 初始化完成 → 弹窗提醒可设二级密码
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
   const [loginBgs, setLoginBgs] = useState([]);   // 背景图列表（可多张，默认只显示第一张）
@@ -84,15 +83,19 @@ export default function Login({ onAuthed }) {
     if (!uname.trim()) return setErr('请设置用户名');
     if (uname.trim().length > 20) return setErr('用户名最多 20 个字符');
     if (pw.length < 4) return setErr('登录密码至少 4 位');
-    if (opPw.length < 4) return setErr('操作密码至少 4 位');
     if (pw !== pw2) return setErr('两次输入的登录密码不一致');
-    if (opPw !== opPw2) return setErr('两次输入的操作密码不一致');
-    if (pw === opPw) return setErr('登录密码与操作密码不能相同');
     setBusy(true);
-    const r = await api.setup(pw, opPw, uname.trim());
+    // 二级操作密码不再在注册时必填：默认关闭，可在设置 → 安全设置里开启
+    const r = await api.setup(pw, '', uname.trim());
     setBusy(false);
     if (!r.ok) return setErr(r.error);
-    onAuthed();
+    setSetupDone(true);
+  }
+
+  function finishSetup(withOp) {
+    setSetupDone(false);
+    if (withOp) onAuthed({ page: 'settings', tab: 'security' });
+    else onAuthed();
   }
 
   return (
@@ -126,8 +129,8 @@ export default function Login({ onAuthed }) {
         ) : mode === 'setup' ? (
           <form className="login-card" onSubmit={doSetup}>
             <span className="pill">首次使用 · 初始化</span>
-            <h2>设置用户名与两套密码</h2>
-            <p className="login-hint">用户名用于登录识别；登录密码用于进入系统；操作密码用于消费、兑换、导入、改设置等敏感操作。</p>
+            <h2>设置用户名与登录密码</h2>
+            <p className="login-hint">用户名用于登录识别；登录密码用于进入系统。二级操作密码默认关闭，可在「设置 → 安全设置」里随时开启。</p>
 
             <label className="field-label">用户名</label>
             <input className="input" type="text" value={uname} onChange={(e) => setUname(e.target.value)} placeholder="如：管理员" autoFocus />
@@ -136,11 +139,6 @@ export default function Login({ onAuthed }) {
             <PasswordInput value={pw} onChange={(e) => setPw(e.target.value)} placeholder="至少 4 位" className="input" />
             <label className="field-label">确认登录密码</label>
             <PasswordInput value={pw2} onChange={(e) => setPw2(e.target.value)} placeholder="再输入一次" className="input" />
-
-            <label className="field-label">操作密码</label>
-            <PasswordInput value={opPw} onChange={(e) => setOpPw(e.target.value)} placeholder="至少 4 位，需与登录密码不同" className="input" />
-            <label className="field-label">确认操作密码</label>
-            <PasswordInput value={opPw2} onChange={(e) => setOpPw2(e.target.value)} placeholder="再输入一次" className="input" />
 
             {err ? <div className="err"><Icon name="alert" size={14} />{err}</div> : null}
             <button className="btn btn-primary btn-block" disabled={busy}>{busy ? '创建中…' : '完成初始化并进入'}</button>
@@ -174,6 +172,26 @@ export default function Login({ onAuthed }) {
       {mode !== 'loading' && !termsAccepted ? (
         <TermsGate onAccepted={(v) => { setTermsAccepted(v || 'ok'); }} />
       ) : null}
+
+      {/* 初始化完成后的提醒：二级操作密码是可选项，随时可在设置里开启 */}
+      <Modal
+        open={setupDone}
+        title="初始化完成"
+        subtitle="二级操作密码（可选 · 默认关闭）"
+        onClose={() => finishSetup(false)}
+        footer={(
+          <>
+            <button className="btn btn-ghost" onClick={() => finishSetup(false)} type="button">稍后再说</button>
+            <button className="btn btn-primary" onClick={() => finishSetup(true)} type="button">现在去设置</button>
+          </>
+        )}
+      >
+        <p className="io-note" style={{ marginTop: 0 }}>系统已创建完成，现在只用登录密码即可进入。</p>
+        <p className="io-note">
+          如需给消费、兑换、导入、修改设置等敏感操作再加一道验证，可前往「设置 → 安全设置」开启二级操作密码。
+          开启后同类操作 10 分钟内只需验证一次，手动调整积分则每次都需输入。
+        </p>
+      </Modal>
 
       {showTerms ? (
         <div className="terms-gate" onClick={() => setShowTerms(false)}>

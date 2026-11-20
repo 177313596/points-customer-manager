@@ -242,6 +242,7 @@ function getSettingsPublic() {
     login_bg_rotate: getLoginBgRotate(),
     ui_mode: getUiMode(),
     theme: getTheme(),
+    op_required: isOpRequired(),
   };
 }
 
@@ -403,13 +404,48 @@ function setLoginUsername(name) {
   return n;
 }
 
+// 首次初始化：只设用户名与登录密码。操作密码（二级密码）默认关闭，可在设置里开启
 function setupPasswords(loginPw, opPw, username) {
   if (!loginPw || String(loginPw).length < 4) throw new Error('登录密码至少 4 位');
-  if (!opPw || String(opPw).length < 4) throw new Error('操作密码至少 4 位');
-  if (String(loginPw) === String(opPw)) throw new Error('登录密码与操作密码不能相同');
+  const op = String(opPw || '').trim();
+  if (op) {
+    if (op.length < 4) throw new Error('操作密码至少 4 位');
+    if (String(loginPw) === op) throw new Error('登录密码与操作密码不能相同');
+  }
   setLoginUsername(username);
   setSetting('login_hash', makeHash(loginPw));
-  setSetting('op_hash', makeHash(opPw));
+  if (op) {
+    setSetting('op_hash', makeHash(op));
+    setSetting('op_required', '1');
+  } else {
+    setSetting('op_hash', '');
+    setSetting('op_required', '0');
+  }
+  return true;
+}
+
+/* 操作密码是否启用。老库里没有 op_required 键时，按“有 op_hash 就算开启”兼容 */
+function isOpRequired() {
+  const flag = getRawSetting('op_required', '');
+  if (flag === '1') return true;
+  if (flag === '0') return false;
+  return !!getRawSetting('op_hash', '');
+}
+
+// 设置页「启用操作密码」：直接写入新密码并标记开启
+function setOpPassword(pw) {
+  const p = String(pw || '').trim();
+  if (p.length < 4) throw new Error('操作密码至少 4 位');
+  if (checkHash(p, getRawSetting('login_hash', ''))) throw new Error('操作密码不能与登录密码相同');
+  setSetting('op_hash', makeHash(p));
+  setSetting('op_required', '1');
+  return true;
+}
+
+// 设置页「关闭操作密码」：清空哈希并把开关置 0（调用方负责先校验当前操作密码）
+function clearOpPassword() {
+  setSetting('op_hash', '');
+  setSetting('op_required', '0');
   return true;
 }
 
@@ -860,6 +896,7 @@ module.exports = {
   getSettingsPublic, setSettings, setLoginBg, getLoginBg, getLoginBgList, setLoginBgList,
   getLoginBgRotate, setLoginBgRotate, getTheme, setTheme, getUiMode, setUiMode,
   hasPassword, setupPasswords, verifyLogin, verifyOp, changePassword,
+  isOpRequired, setOpPassword, clearOpPassword,
   getLoginUsername, setLoginUsername,
   getTermsAccepted, setTermsAccepted,
   pointsForAmount, getRedeemRule,
