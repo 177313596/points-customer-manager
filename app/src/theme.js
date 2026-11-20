@@ -60,6 +60,7 @@ export function applyTheme(theme) {
   set('--primary', accent);
   set('--primary-dark', shade(accent, -0.22));
   set('--primary-soft', mix(accent, '#FFFFFF', 0.9));
+  set('--brand', shade(accent, -0.18));
   set('--primary-line', mix(accent, '#FFFFFF', 0.72));
   set('--on-primary', luminance(accent) > 0.62 ? '#0B2B27' : '#FFFFFF');
   // 侧栏 / 登录页品牌区的深色底，跟着主色走

@@ -12,8 +12,12 @@ const cloud = require('./cloud');
 let win = null;
 let dataDir = '';
 const sessions = new Set();
-let elevatedUntil = 0;
-const ELEVATION_MS = 10 * 60 * 1000;
+let opVerified = false;      // 本次登录是否已通过一次操作密码
+let lastActiveAt = 0;        // 最近一次“有人在用软件”的时间
+const ELEVATION_MS = Number(process.env.PM_OP_IDLE_MS || 5 * 60 * 1000);   // 连续 5 分钟无操作即失效（测试可用 PM_OP_IDLE_MS 缩短）
+
+function markActive() { lastActiveAt = Date.now(); }
+function opExpired() { return !opVerified || (Date.now() - lastActiveAt) > ELEVATION_MS; }
 
 /* ---------------- IPC 包装 ---------------- */
 
@@ -26,11 +30,12 @@ function handle(channel, fn, opt = {}) {
           return { ok: false, error: '未登录或会话已失效，请重新登录', code: 'UNAUTH' };
         }
       }
-      // 未启用操作密码（二级密码）时，敏感操作不再要求 10 分钟授权
-      if (opt.elevated && db.isOpRequired() && Date.now() > elevatedUntil) {
-        return { ok: false, error: '操作密码授权已过期，请重新验证', code: 'NEED_OP' };
+      // 操作密码：登录后验证过一次即生效；之后连续 5 分钟无操作则失效，需要重新输入
+      if (opt.elevated && db.isOpRequired() && opExpired()) {
+        return { ok: false, error: '超过 5 分钟未操作，请重新输入操作密码', code: 'NEED_OP' };
       }
       const data = await fn(p);
+      if (opt.elevated && db.isOpRequired() && !opExpired()) markActive();
       if (opt.syncOnWrite) kickSync();
       return { ok: true, data };
     } catch (err) {
@@ -38,6 +43,12 @@ function handle(channel, fn, opt = {}) {
     }
   });
 }
+
+/* 渲染进程在有鼠标/键盘操作时上报，用来续期操作授权 */
+handle('auth:activity', async () => {
+  if (opVerified && db.isOpRequired()) markActive();
+  return { op_verified: opVerified && db.isOpRequired(), expires_at: lastActiveAt + ELEVATION_MS, elevation_ms: ELEVATION_MS };
+}, { public: true });
 
 function newToken() {
   const t = crypto.randomBytes(24).toString('hex');
@@ -197,7 +208,8 @@ handle('auth:login', async (p) => {
   if (!db.hasPassword()) throw new Error('系统尚未初始化');
   if (!String(p.username || '').trim()) throw new Error('请输入用户名');
   if (!db.verifyLogin(p.username, p.password)) throw new Error('用户名或密码错误');
-  elevatedUntil = 0;
+  opVerified = false;
+  lastActiveAt = Date.now();
   return { token: newToken() };
 }, { public: true });
 
@@ -206,8 +218,9 @@ handle('auth:set-username', async (p) => db.setLoginUsername(p.username), { elev
 handle('auth:verify-op', async (p) => {
   if (!db.isOpRequired()) throw new Error('未启用操作密码，无需验证');
   if (!db.verifyOp(p.password)) throw new Error('操作密码错误');
-  elevatedUntil = Date.now() + ELEVATION_MS;
-  return { elevatedUntil, elevationMs: ELEVATION_MS };
+  opVerified = true;
+  markActive();
+  return { op_verified: true, expires_at: lastActiveAt + ELEVATION_MS, elevation_ms: ELEVATION_MS };
 });
 
 // 设置页启用操作密码（二级密码）：直接设一个新密码并立刻开启
@@ -215,8 +228,9 @@ handle('auth:set-op-password', async (p) => {
   const pw = String(p.password || '');
   if (!pw.trim()) throw new Error('请输入操作密码');
   db.setOpPassword(pw);
-  elevatedUntil = Date.now() + ELEVATION_MS;
-  return { op_required: true, elevatedUntil, elevationMs: ELEVATION_MS };
+  opVerified = true;
+  markActive();
+  return { op_required: true, op_verified: true, expires_at: lastActiveAt + ELEVATION_MS, elevation_ms: ELEVATION_MS };
 }, { syncOnWrite: true });
 
 // 设置页关闭操作密码：必须输入当前操作密码确认，关闭后敏感操作不再二次验证
@@ -225,7 +239,8 @@ handle('auth:disable-op', async (p) => {
   if (!String(p.password || '').trim()) throw new Error('请输入当前操作密码');
   if (!db.verifyOp(p.password)) throw new Error('操作密码错误');
   db.clearOpPassword();
-  elevatedUntil = 0;
+  opVerified = false;
+  lastActiveAt = 0;
   return { op_required: false };
 }, { syncOnWrite: true });
 
@@ -244,13 +259,14 @@ handle('auth:change-password', async (p) => {
     throw new Error('当前登录密码错误');
   }
   db.changePassword(kind, newPw);
-  if (kind === 'op') elevatedUntil = 0; // 改了操作密码，之前的授权立即失效
+  if (kind === 'op') { opVerified = false; lastActiveAt = 0; } // 改了操作密码，之前的授权立即失效
   return { kind };
 }, { syncOnWrite: true });
 
 handle('auth:logout', async (p) => {
   sessions.delete(p.__token);
-  elevatedUntil = 0;
+  opVerified = false;
+  lastActiveAt = 0;
   return true;
 }, { public: true });
 

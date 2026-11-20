@@ -145,8 +145,10 @@ export default function TermsGate({ onAccepted }) {
             if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); toggleConsent(); }
           }}
         >
-          <span className={'terms-box' + (checked ? ' on' : '')} aria-hidden="true">
-            {checked ? <Icon name="check" size={12} /> : null}
+          <span className="terms-hit" aria-hidden="true">
+            <span className={'terms-box' + (checked ? ' on' : '')}>
+              <Icon name="check" size={11} />
+            </span>
           </span>
           <span>
             {locked

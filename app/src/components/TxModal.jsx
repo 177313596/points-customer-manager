@@ -257,7 +257,7 @@ export default function TxModal({ open, mode, customer, rules, onClose, onDone, 
           </div>
           <Field label="调整原因（会写入记录）"><input className="input" value={note} onChange={(e) => setNote(e.target.value)} placeholder="如 补录上月消费积分" /></Field>
           {opRequired ? (
-            <Field label="操作密码 *" hint="手动调整不受 10 分钟授权窗口影响，每次都必须重新输入">
+            <Field label="操作密码 *" hint="手动调整不受操作授权影响，每次都必须重新输入">
               <PasswordInput value={adjustPw} onChange={(e) => setAdjustPw(e.target.value)} placeholder="请输入操作密码" className="input" />
             </Field>
           ) : (

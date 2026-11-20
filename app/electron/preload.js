@@ -28,6 +28,7 @@ const api = {
   setOpPassword: (password) => call('auth:set-op-password', { password }),
   disableOp: (password) => call('auth:disable-op', { password }),
   changePassword: (kind, oldPassword, newPassword) => call('auth:change-password', { kind, oldPassword, newPassword }),
+  activity: () => call('auth:activity'),
   setUsername: (username) => call('auth:set-username', { username }),
   acceptTerms: (when) => call('auth:accept-terms', { when }),
 

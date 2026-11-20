@@ -124,11 +124,30 @@ export default function App() {
     e.preventDefault();
     const r = await api.verifyOp(opPw);
     if (!r.ok) { setOpErr(r.error); return; }
-    setElevatedUntil(r.data.elevatedUntil);
+    setElevatedUntil(r.data.expires_at || r.data.elevatedUntil || 0);
     setOpOpen(false);
     if (opResolver.current) { opResolver.current(true); opResolver.current = null; }
-    notify('操作授权已开启，10 分钟内有效');
+    notify('操作授权已开启，5 分钟内有操作即持续有效');
   }
+
+  /* 谁在用软件：鼠标 / 键盘 / 滚轮 / 触摸都算一次“操作”，用来给操作授权续期。
+     节流 5 秒，避免频繁 IPC；没有操作时授权到点自然失效。 */
+  useEffect(() => {
+    if (!authed) return;
+    let last = 0;
+    const ping = () => {
+      const now = Date.now();
+      if (now - last < 5000) return;
+      last = now;
+      api.activity().then((r) => {
+        if (!r || !r.ok || !r.data) return;
+        setElevatedUntil(r.data.op_verified ? (r.data.expires_at || 0) : 0);
+      });
+    };
+    const evs = ['mousedown', 'keydown', 'wheel', 'touchstart', 'pointerdown'];
+    evs.forEach((e) => window.addEventListener(e, ping, { passive: true }));
+    return () => evs.forEach((e) => window.removeEventListener(e, ping));
+  }, [authed]);
 
   function closeOp() {
     setOpOpen(false);
@@ -280,7 +299,7 @@ export default function App() {
             placeholder="操作密码"
           />
           {opErr ? <div className="err"><Icon name="alert" size={14} />{opErr}</div> : null}
-          <p className="field-hint">验证后 10 分钟内可连续操作，过期自动失效。</p>
+          <p className="field-hint">登录后验证一次即可；之后只要连续 5 分钟内有操作就一直有效，超过 5 分钟没动才需要重输。</p>
         </form>
       </Modal>
 

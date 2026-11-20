@@ -579,7 +579,7 @@ export default function SettingsPage({ settings, call, refresh, notify, elevated
             <div className="form-grid">
               <Field
                 label="二级操作密码（可选）"
-                hint="默认关闭。开启后，消费、兑换、导入、修改设置等敏感操作需先输入一次操作密码（10 分钟内有效）；手动调整积分每次都需输入。"
+                hint="默认关闭。开启后，消费、兑换、导入、修改设置等敏感操作在每次登录后只需验证一次；之后连续 5 分钟内有操作就一直免验证，超过 5 分钟没操作才需要重输（手动调整积分每次都要输入）。"
               >
                 <div className="field-inline">
                   <span className="field-hint">{opOn ? '已启用：敏感操作需二次验证' : '未启用：仅用登录密码保护'}</span>
@@ -692,7 +692,7 @@ export default function SettingsPage({ settings, call, refresh, notify, elevated
       <Modal
         open={opEnableOpen}
         title="启用二级操作密码"
-        subtitle="开启后敏感操作需输入一次，10 分钟内有效"
+        subtitle="开启后每次登录验证一次，之后 5 分钟内有操作即持续有效"
         onClose={() => setOpEnableOpen(false)}
         footer={(
           <>
