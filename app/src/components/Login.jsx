@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { api } from '../utils';
-import { Icon, PasswordInput, Modal } from '../ui';
+import { Icon, PasswordInput, Modal, Spotlight } from '../ui';
 import TermsGate, { TermsBody } from './TermsGate';
 import { applyTheme } from '../theme';
 import brandLogo from '../assets/brand-logo.png';
@@ -124,6 +124,7 @@ export default function Login({ onAuthed }) {
             />
           </div>
         ) : null}
+        <Spotlight />
         {mode === 'loading' ? (
           <div className="login-card"><div className="loading-dot" /></div>
         ) : mode === 'setup' ? (

@@ -371,6 +371,26 @@ p { margin: 0; }
   animation: bgBlurIn .95s cubic-bezier(.2, .7, .3, 1) both;
 }
 .main > .topbar, .main > .content { position: relative; z-index: 1; }
+
+/* 鼠标聚光（标准版）：柔光跟着指针滑，压在背景层之上、卡片之下；简洁版整层不渲染 */
+.spotlight {
+  position: absolute; left: 0; top: 0;
+  width: 760px; height: 760px;
+  margin-left: -380px; margin-top: -380px;
+  pointer-events: none; z-index: 0;
+  background: radial-gradient(closest-side,
+    rgba(255, 255, 255, .30) 0%,
+    rgba(255, 255, 255, .18) 22%,
+    color-mix(in srgb, var(--primary) 12%, transparent) 48%,
+    color-mix(in srgb, var(--primary) 7%, transparent) 68%,
+    transparent 88%);
+  opacity: 0;
+  transition: opacity .55s ease;
+  will-change: transform;
+  transform: translate3d(0, 0, 0);
+}
+.spotlight.on { opacity: 1; }
+body.ui-lite .spotlight { display: none !important; }
 .topbar {
   display: flex; align-items: center; justify-content: space-between;
   padding: 32px 132px 14px 26px; gap: 16px;

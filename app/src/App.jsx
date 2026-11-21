@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api, fmtMoney, relativeTime } from './utils';
-import { Icon, Modal, GlassDefs } from './ui';
+import { Icon, Modal, GlassDefs, Spotlight } from './ui';
 import Login from './components/Login';
 import Dashboard from './components/Dashboard';
 import Customers from './components/Customers';
@@ -234,6 +234,7 @@ export default function App() {
             />
           </div>
         ) : null}
+        <Spotlight />
         <header className="topbar">
           <div>
             <h2>{meta.label}</h2>

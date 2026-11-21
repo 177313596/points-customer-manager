@@ -379,6 +379,18 @@ async function main() {
         return [bodyHas, /url\\(/.test(on) ? 'url' : on, /none/.test(lite) ? 'none' : lite, off, hasFilterDef].join('|');
       })()
     `).catch(() => 'err')) === 'true|url|none|none|true',
+    // 鼠标聚光：标准版有这一层，简洁版整层不渲染，且不接收鼠标事件
+    spotlightLayer: (await win.webContents.executeJavaScript(`
+      (() => {
+        const s = document.querySelector('.spotlight');
+        if (!s) return 'missing';
+        const std = getComputedStyle(s);
+        document.body.classList.add('ui-lite');
+        const lite = getComputedStyle(s).display;
+        document.body.classList.remove('ui-lite');
+        return [std.display, std.pointerEvents, lite, s.getAttribute('aria-hidden')].join('|');
+      })()
+    `).catch(() => 'err')) === 'block|none|none|true',
   };
   Object.entries(dashChecks).forEach(([k, v]) => log((v ? 'PASS ' : 'FAIL ') + k));
 

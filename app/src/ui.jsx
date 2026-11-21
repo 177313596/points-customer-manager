@@ -68,6 +68,63 @@ export function GlassDefs() {
   );
 }
 
+/** 鼠标聚光：跟着指针缓慢滑动的柔光，铺在背景层之上、内容卡片之下（标准版专属，简洁版由 CSS 关掉）
+    只改 transform，走 rAF + 缓动，指针静止 2.5 秒后淡出，避免一直亮着抢注意力 */
+export function Spotlight() {
+  const ref = useRef(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return undefined;
+    let tx = window.innerWidth * 0.62;
+    let ty = window.innerHeight * 0.45;
+    let cx = tx;
+    let cy = ty;
+    let raf = 0;
+    let idleTimer = 0;
+
+    const step = () => {
+      const dx = tx - cx;
+      const dy = ty - cy;
+      if (Math.abs(dx) < 0.4 && Math.abs(dy) < 0.4) {
+        cx = tx; cy = ty;
+        el.style.transform = `translate3d(${Math.round(cx)}px, ${Math.round(cy)}px, 0)`;
+        raf = 0;
+        return;
+      }
+      cx += dx * 0.13;
+      cy += dy * 0.13;
+      el.style.transform = `translate3d(${Math.round(cx)}px, ${Math.round(cy)}px, 0)`;
+      raf = requestAnimationFrame(step);
+    };
+    const kick = () => { if (!raf) raf = requestAnimationFrame(step); };
+
+    const onMove = (e) => {
+      const host = el.parentElement;
+      const r = host ? host.getBoundingClientRect() : { left: 0, top: 0 };
+      tx = e.clientX - r.left;
+      ty = e.clientY - r.top;
+      el.classList.add('on');
+      clearTimeout(idleTimer);
+      idleTimer = setTimeout(() => el.classList.remove('on'), 4500);
+      kick();
+    };
+    const onLeave = () => { el.classList.remove('on'); };
+
+    el.style.transform = `translate3d(${Math.round(cx)}px, ${Math.round(cy)}px, 0)`;
+    window.addEventListener('pointermove', onMove, { passive: true });
+    window.addEventListener('pointerdown', onMove, { passive: true });
+    document.addEventListener('pointerleave', onLeave, { passive: true });
+    return () => {
+      if (raf) cancelAnimationFrame(raf);
+      clearTimeout(idleTimer);
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerdown', onMove);
+      document.removeEventListener('pointerleave', onLeave);
+    };
+  }, []);
+  return <div ref={ref} className="spotlight" aria-hidden="true" />;
+}
+
 /** 带“小眼睛”的密码输入框：点击右侧图标可切换显示/隐藏 */
 export function PasswordInput({
   value, onChange, placeholder, className = 'input input-lg',

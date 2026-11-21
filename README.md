@@ -60,6 +60,10 @@
 | --- | --- |
 | ![开关开](docs/screenshots/settings-liquid-on.png) | ![开关关](docs/screenshots/settings-liquid-off.png) |
 
+| 鼠标聚光 · 登录页 | 鼠标聚光 · 工作台 |
+| --- | --- |
+| ![聚光登录页](docs/screenshots/spotlight-login.png) | ![聚光工作台](docs/screenshots/spotlight-dashboard.png) |
+
 > 截图由项目内的离屏脚本（`app/scripts/brand-shot.js`、`app/scripts/ui-mode-shot.js`、`app/scripts/glass-shot.js`、`app/scripts/liquid-shot.js`）真实渲染后捕获，非设计稿。
 
 ---
@@ -175,7 +179,7 @@ $env:VITE_DEV_SERVER_URL="http://localhost:5173"; npm start   # 终端 B
 
 ```powershell
 cd app
-npm run build:installer     # 产出 release\积分客户管理系统-安装包-1.1.2.exe（NSIS）
+npm run build:installer     # 产出 release\积分客户管理系统-安装包-1.1.3.exe（NSIS）
 ```
 
 或在仓库根目录使用一键脚本（会先构建界面再同步 / 打包）：
@@ -212,7 +216,7 @@ npm run build:installer     # 产出 release\积分客户管理系统-安装包-
 │   ├── icon.png
 │   └── screenshots/
 ├── 积分客户管理系统/             # 免安装目录版成品（可选提交 / 建议走 Release）
-├── 积分客户管理系统-安装包-1.1.2.exe
+├── 积分客户管理系统-安装包-1.1.3.exe
 ├── 重新构建.ps1
 ├── 构建安装包.ps1
 ├── 使用说明.md                  # 面向使用者的完整手册
@@ -279,6 +283,13 @@ npm run build:installer     # 产出 release\积分客户管理系统-安装包-
 
 ## 🗒 更新日志
 
+**v1.1.3（2026-11-21）**
+
+- 标准版新增**鼠标聚光**：一层跟着指针缓慢滑动的柔光（白色核心 + 品牌色光晕），铺在背景图之上、内容卡片之下，所以背景被照亮而卡片、数字不受影响。
+- 细节：指针移动时淡入，静止 4.5 秒后自动淡出；用 `rAF` + 0.13 缓动跟随，指针停在原处不会抖动、无重排开销；`pointer-events: none`，完全不挡点击。
+- 简洁版整层不渲染（`body.ui-lite .spotlight { display: none }`），与液态玻璃、界面模式互不干扰。
+- 回归新增 `spotlightLayer` 断言（标准版 `display:block`、`pointer-events:none`、简洁版 `none`、`aria-hidden=true`），新增 `app/scripts/spot-shot.js` 截图脚本（用真实 mouseMove 事件把指针推到位再截）。
+
 **v1.1.2（2026-11-20）**
 
 - 新增**独立开关「液态玻璃效果」**（设置 → 外观与背景 → 视觉效果）：登录卡、弹窗、使用声明卡变成半透明玻璃，背景透过卡片时被**真实折射**（`backdrop-filter: url(#lg-refract)` 的 SVG 位移滤镜，不是简单模糊），并带内侧玻璃高光与染色。
@@ -320,6 +331,7 @@ npm run build:installer     # 产出 release\积分客户管理系统-安装包-
 | `terms-test.js` | 使用声明倒计时与同意持久化 |
 | `ui-mode-shot.js` / `brand-shot.js` / `mainbg-shot.js` / `win-frame-check.js` | 真实渲染截图与窗口圆角校验 |
 | `glass-probe.js` / `glass-shot.js` / `liquid-shot.js` | 液态玻璃：滤镜可行性探针、开/关折射对比截图、设置页开关截图 |
+| `spot-shot.js` | 鼠标聚光：用真实 `sendInputEvent` 鼠标移动把指针推到位，再截登录页与工作台 |
 
 ```powershell
 cd app
