@@ -179,7 +179,7 @@ $env:VITE_DEV_SERVER_URL="http://localhost:5173"; npm start   # 终端 B
 
 ```powershell
 cd app
-npm run build:installer     # 产出 release\积分客户管理系统-安装包-1.1.6.exe（NSIS）
+npm run build:installer     # 产出 release\积分客户管理系统-安装包-1.1.9.exe（NSIS）
 ```
 
 或在仓库根目录使用一键脚本（会先构建界面再同步 / 打包）：
@@ -216,7 +216,7 @@ npm run build:installer     # 产出 release\积分客户管理系统-安装包-
 │   ├── icon.png
 │   └── screenshots/
 ├── 积分客户管理系统/             # 免安装目录版成品（可选提交 / 建议走 Release）
-├── 积分客户管理系统-安装包-1.1.6.exe
+├── 积分客户管理系统-安装包-1.1.9.exe
 ├── 重新构建.ps1
 ├── 构建安装包.ps1
 ├── 使用说明.md                  # 面向使用者的完整手册
@@ -283,8 +283,9 @@ npm run build:installer     # 产出 release\积分客户管理系统-安装包-
 
 ## 🗒 更新日志
 
-**v1.1.9（2026-11-28）· 本轮未重打安装包，安装包仍为 1.1.6**
+**v1.1.9（2026-11-28）· 已打包安装包 1.1.9**
 
+- **安装包**：`PointsCustomerManager-Setup-1.1.9.exe`（约 78 MB，NSIS、x64），见 [Releases](https://github.com/177313596/points-customer-manager/releases/tag/v1.1.9)。
 - **使用声明不再卡阅读倒计时**：右上角"还需阅读 N 秒"的徽标整块删除，勾选框从声明弹出那一刻就能点，不再等 10 秒。文案也从"请先阅读声明，N 秒后才能勾选同意"回到正常的同意条款。
 - **未勾选时底部按钮不再是"禁止键"**：以前未勾选（或倒计时未满）时按钮挂禁用态，悬停是一条禁止符、点了没反应。现在按钮始终是正常的主色实心按钮、`cursor: pointer`，点下去会给一句"请先勾选下方「我已阅读并同意」"的提示，同时把勾选行**轻轻晃一下（±4px、0.6s）**并把方框描边变暖橙，告诉你要点哪里；勾选后按钮文案自然变成"同意并继续"。
 - 回归：`headless-check.js` 的使用声明断言全部换新（`termsTimerRemoved` / `termsButtonNeverDisabled` / `termsCheckboxNotLocked` / `termsButtonCursorPointer` / `termsUncheckedClickHints` / `termsUncheckedClickNudges`），实测按钮 `cursor: pointer`、无 `disabled` 与 `aria-disabled`、未勾选点击后勾选状态仍为 false 且提示出现，**RESULT ALL-PASS**。
