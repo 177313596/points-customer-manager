@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { api } from '../utils';
 import { Icon } from '../ui';
 
@@ -68,40 +68,37 @@ export function TermsBody() {
   );
 }
 
-/* 首次使用：需读完 10 秒倒计时才能勾选同意，勾选后进入系统 */
-const READ_SECONDS = 10;
-
+/* 首次使用：阅读后勾选同意即可进入系统。
+   不设"还需阅读 N 秒"的倒计时——右上角那块计时已删除，勾选框从打开就可以点。
+   底部按钮也不再做禁用态：未勾选时照样能点，点下去给一句提示并把勾选行轻轻晃一下，
+   鼠标不会变成一条禁止符。 */
 export default function TermsGate({ onAccepted }) {
   const [checked, setChecked] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const [hint, setHint] = useState('');
-  const [left, setLeft] = useState(READ_SECONDS);
+  const [nudge, setNudge] = useState(false);
+  const nudgeTimer = useRef(null);
+  useEffect(() => () => clearTimeout(nudgeTimer.current), []);
 
-  useEffect(() => {
-    if (left <= 0) return undefined;
-    const t = setTimeout(() => setLeft((n) => (n > 0 ? n - 1 : 0)), 1000);
-    return () => clearTimeout(t);
-  }, [left]);
+  /* 未勾选就点"同意"：把勾选行晃一下 + 提示，而不是让按钮变成点不动的死键
+     （用 setTimeout 而不是 rAF：窗口不可见时 rAF 会被挂起，重播动画起不来） */
+  function pokeConsent() {
+    setHint('请先勾选下方「我已阅读并同意」，再点同意并继续');
+    setNudge(false);
+    setTimeout(() => setNudge(true), 24);
+    clearTimeout(nudgeTimer.current);
+    nudgeTimer.current = setTimeout(() => setNudge(false), 660);
+  }
 
-  const locked = left > 0;
-
-  /* 倒计时结束自动清掉“还需阅读”提示 */
-  useEffect(() => {
-    if (!locked) setHint('');
-  }, [locked]);
-
-  /* 勾选区：始终可点击。倒计时内点它不再静默无反应，而是提示还差几秒 */
   function toggleConsent() {
-    if (locked) { setHint(`还需阅读 ${left} 秒，读完后即可勾选同意`); return; }
     setHint('');
     setChecked((v) => !v);
   }
 
   async function agree() {
     if (busy) return;
-    if (locked) { setHint(`还需阅读 ${left} 秒，读完后即可同意`); return; }
-    if (!checked) { setHint('请先勾选左侧方框，确认已阅读《使用声明》'); return; }
+    if (!checked) { pokeConsent(); return; }
     setErr('');
     setHint('');
     setBusy(true);
@@ -110,8 +107,6 @@ export default function TermsGate({ onAccepted }) {
     if (!r || !r.ok) { setErr((r && r.error) || '保存失败，请重试'); return; }
     onAccepted((r.data && r.data.terms_accepted) || 'ok');
   }
-
-  const ready = !locked && checked && !busy;
 
   /* 底部整块（含按钮左右两侧留白）都可点击，避免“按钮左边一小段点不动” */
   function onFootClick(e) {
@@ -128,17 +123,16 @@ export default function TermsGate({ onAccepted }) {
             <h3>积分客户管理系统 使用声明</h3>
             <p className="terms-sub">首次使用请阅读并同意以下条款；同意后不再弹出，可在登录页随时查看。</p>
           </div>
-          {locked ? <span className="terms-timer">还需阅读 {left} 秒</span> : <span className="terms-timer done">可以同意</span>}
         </div>
         <TermsBody />
         {err ? <div className="err"><Icon name="alert" size={14} />{err}</div> : null}
-        {/* 自定义勾选区：整行都能点，方框本体加大到 20px 并外扩热区；
-            不用原生 checkbox + disabled，避免禁用态把鼠标事件吞掉 */}
+        {/* 自定义勾选区：整行都能点，方框本体 18px 并外扩到 36px 热区；
+            不用原生 checkbox + disabled，避免禁用态把鼠标事件吞掉。
+            勾选行从打开就可用，没有倒计时锁 */}
         <div
-          className={'terms-consent' + (locked ? ' locked' : '') + (checked ? ' on' : '')}
+          className={'terms-consent' + (checked ? ' on' : '') + (nudge ? ' nudge' : '')}
           role="checkbox"
           aria-checked={checked}
-          aria-disabled={locked}
           tabIndex={0}
           onClick={toggleConsent}
           onKeyDown={(e) => {
@@ -150,17 +144,13 @@ export default function TermsGate({ onAccepted }) {
               <Icon name="check" size={11} />
             </span>
           </span>
-          <span>
-            {locked
-              ? `请先阅读声明，${left} 秒后才能勾选同意`
-              : '我已阅读并同意上述《使用声明》，知悉积分/余额规则、数据备份责任与禁止事项'}
-          </span>
+          <span>我已阅读并同意上述《使用声明》，知悉积分/余额规则、数据备份责任与禁止事项</span>
         </div>
         {/* 提示条固定占位（空时不可见），避免弹出提示时整张卡片上下跳动 */}
         <div className={'terms-hint' + (hint ? '' : ' is-empty')}>{hint || ' '}</div>
         <div className="terms-foot" onClick={onFootClick}>
-          <button type="button" className={'btn btn-primary btn-block' + (ready ? '' : ' is-idle')} aria-disabled={!ready} onClick={agree}>
-            {busy ? '正在保存…' : locked ? `请阅读声明（${left} 秒后可同意）` : checked ? '同意并继续' : '请先勾选同意'}
+          <button type="button" className="btn btn-primary btn-block" onClick={agree}>
+            {busy ? '正在保存…' : checked ? '同意并继续' : '请先勾选同意'}
           </button>
         </div>
       </div>

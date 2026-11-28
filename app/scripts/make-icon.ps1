@@ -1,12 +1,62 @@
 ﻿# 由一张方形图片生成应用图标：build\icon.png（512，窗口/任务栏用）+ build\icon.ico（16~256 多尺寸，exe 与安装包用）
 # 用法： .\make-icon.ps1 -Source 'D:\桌面\xxx.png'
+# 形状：超椭圆（连续曲率圆角 / squircle），指数 n=5，四角透明度按像素覆盖度做抗锯齿
 param(
   [Parameter(Mandatory = $true)][string]$Source,
-  [string]$OutDir = (Join-Path (Split-Path -Parent $MyInvocation.MyCommand.Path) '..\build')
+  [string]$OutDir = (Join-Path (Split-Path -Parent $MyInvocation.MyCommand.Path) '..\build'),
+  [double]$SquircleN = 5.0
 )
 
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.Drawing
+
+# 连续曲率遮罩：|x/a|^n + |y/b|^n <= 1，逐像素 4x4 超采样算覆盖度，alpha = 255 * 覆盖度
+Add-Type -TypeDefinition @"
+using System;
+using System.Drawing;
+using System.Drawing.Imaging;
+using System.Runtime.InteropServices;
+
+public static class SquircleMask
+{
+    public static void Apply(Bitmap bmp, double n)
+    {
+        int w = bmp.Width, h = bmp.Height;
+        BitmapData data = bmp.LockBits(new Rectangle(0, 0, w, h), ImageLockMode.ReadWrite, PixelFormat.Format32bppArgb);
+        byte[] buf = new byte[data.Stride * h];
+        Marshal.Copy(data.Scan0, buf, 0, buf.Length);
+        double cx = (w - 1) / 2.0, cy = (h - 1) / 2.0;
+        double a = w / 2.0, b = h / 2.0;
+        const int SS = 4;
+        int total = SS * SS;
+        for (int y = 0; y < h; y++)
+        {
+            for (int x = 0; x < w; x++)
+            {
+                int inside = 0;
+                for (int j = 0; j < SS; j++)
+                {
+                    double py = y + (j + 0.5) / SS - cy;
+                    double ny = Math.Pow(Math.Abs(py / b), n);
+                    for (int i = 0; i < SS; i++)
+                    {
+                        double px = x + (i + 0.5) / SS - cx;
+                        if (Math.Pow(Math.Abs(px / a), n) + ny <= 1.0) inside++;
+                    }
+                }
+                int idx = y * data.Stride + x * 4;
+                buf[idx + 3] = (byte)(255 * inside / total);
+            }
+        }
+        Marshal.Copy(buf, 0, data.Scan0, buf.Length);
+        bmp.UnlockBits(data);
+    }
+}
+"@ -ReferencedAssemblies @(
+  [System.Drawing.Bitmap].Assembly.Location,
+  [System.Drawing.Rectangle].Assembly.Location,
+  [System.Object].Assembly.Location
+)
 
 function Log($m) { Write-Host "[..] $m" -ForegroundColor Cyan }
 
@@ -64,6 +114,7 @@ try {
     }
 
     $f = Join-Path $tmp ("$s.png")
+    [SquircleMask]::Apply($bmp, $SquircleN)
     $bmp.Save($f, [System.Drawing.Imaging.ImageFormat]::Png)
     $bmp.Dispose()
     $files += $f
@@ -79,6 +130,7 @@ try {
     $g2.DrawImage($src, (New-Object System.Drawing.Rectangle(0, 0, 512, 512)), $sx, $sy, $side, $side, [System.Drawing.GraphicsUnit]::Pixel)
   } finally { $g2.Dispose() }
   $iconPng = Join-Path $OutDir 'icon.png'
+  [SquircleMask]::Apply($bmp512, $SquircleN)
   $bmp512.Save($iconPng, [System.Drawing.Imaging.ImageFormat]::Png)
   $bmp512.Dispose()
 

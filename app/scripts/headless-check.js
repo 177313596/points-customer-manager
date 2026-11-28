@@ -99,7 +99,7 @@ async function main() {
   const apiOk = await win.webContents.executeJavaScript('typeof window.api === "object"').catch((e) => 'err:' + e.message);
   log('api ok: ' + apiOk);
 
-  /* ---- 使用声明闸门：先 10 秒倒计时，倒计时结束后才能勾选同意 ---- */
+  /* ---- 使用声明闸门：没有倒计时；未勾选时底部按钮也不是禁用键 ---- */
   const gateRes = await win.webContents.executeJavaScript(`
     (async () => {
       const wait = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -109,37 +109,35 @@ async function main() {
       const textLen = g.querySelector('.terms-body') ? g.querySelector('.terms-body').innerText.length : 0;
       const chk0 = g.querySelector('.terms-consent');
       const btn0 = g.querySelector('.terms-foot .btn');
-      const lockedChk = chk0.getAttribute('aria-disabled') === 'true' && chk0.classList.contains('locked');
-      const lockedBtn = btn0.getAttribute('aria-disabled') === 'true';
+      const timerEl = g.querySelector('.terms-timer');
       const btnTextBefore = btn0.textContent.trim();
-      const timerText = g.querySelector('.terms-timer') ? g.querySelector('.terms-timer').textContent.trim() : '';
-      chk0.click();                        // 锁定期间点勾选行：不勾上，只出提示
-      await wait(300);
-      const checkedWhileLocked = document.querySelector('.terms-consent').getAttribute('aria-checked') === 'true';
-      const hintWhileLocked = (document.querySelector('.terms-hint') || {}).textContent || '';
+      const btnCursor = getComputedStyle(btn0).cursor;
+      const btnHardDisabled = btn0.disabled === true;
+      const btnAriaDisabled = btn0.getAttribute('aria-disabled');
+      const chkLocked = chk0.classList.contains('locked');
+      const chkAriaDisabled = chk0.getAttribute('aria-disabled');
 
-      // 等倒计时走完（最多 14 秒）
-      let waited = 0;
-      while (waited < 14000) {
-        const c = document.querySelector('.terms-consent');
-        if (c && !c.classList.contains('locked')) break;
-        await wait(500);
-        waited += 500;
-      }
-      const chk1 = document.querySelector('.terms-consent');
-      const unlocked = chk1 && !chk1.classList.contains('locked');
-      const timerAfter = document.querySelector('.terms-timer') ? document.querySelector('.terms-timer').textContent.trim() : '';
-      chk1.click();
-      await wait(350);
-      const btn1 = document.querySelector('.terms-gate .terms-foot .btn');
-      const disabledAfter = btn1 ? btn1.getAttribute('aria-disabled') === 'true' : null;
-      const btnTextAfter = btn1 ? btn1.textContent.trim() : '';
-      if (btn1) btn1.click();
-      await wait(700);
+      btn0.click();                        // 未勾选直接点"请先勾选同意"
+      await wait(260);
+      const hintAfterBtn = (document.querySelector('.terms-hint') || {}).textContent.trim();
+      const nudgeSeen = !!document.querySelector('.terms-consent.nudge');
+      const stillUnchecked = document.querySelector('.terms-consent').getAttribute('aria-checked') === 'false';
+      const btnCursorAfter = getComputedStyle(document.querySelector('.terms-foot .btn')).cursor;
+
+      document.querySelector('.terms-consent').click();   // 勾选
+      await wait(220);
+      const checkedNow = document.querySelector('.terms-consent').getAttribute('aria-checked') === 'true';
+      const btnMid = document.querySelector('.terms-foot .btn');
+      const btnTextMid = btnMid ? btnMid.textContent.trim() : '';
+      if (btnMid) btnMid.click();          // 同意并继续
+      await wait(900);
       return JSON.stringify({
-        gate: 1, lockedChk, lockedBtn, btnTextBefore, timerText,
-        checkedWhileLocked, hintWhileLocked, unlocked, waitMs: waited, timerAfter,
-        disabledAfter, btnTextAfter, sections, textLen,
+        gate: 1, sections, textLen,
+        timerRemoved: !timerEl,
+        btnTextBefore, btnCursor, btnHardDisabled, btnAriaDisabled: btnAriaDisabled || '',
+        chkLocked, chkAriaDisabled: chkAriaDisabled || '',
+        hintAfterBtn, nudgeSeen, stillUnchecked, btnCursorAfter,
+        checkedNow, btnTextMid,
         gone: !document.querySelector('.terms-gate'),
       });
     })()
@@ -150,12 +148,14 @@ async function main() {
 
   const gateChecks = {
     termsGateShown: gateObj.gate === 1,
-    termsCountdownStart: /还需阅读 (\d+) 秒/.test(String(gateObj.timerText || '')),
-    termsCheckboxLocked: gateObj.lockedChk === true && gateObj.checkedWhileLocked === false,
-    termsLockedClickShowsHint: /还需阅读/.test(String(gateObj.hintWhileLocked || '')),
-    termsAgreeLocked: gateObj.lockedBtn === true && /请阅读声明（(\d+) 秒后可同意）/.test(String(gateObj.btnTextBefore || '')),
-    termsCheckboxUnlocksAfter10s: gateObj.unlocked === true && Number(gateObj.waitMs || 0) >= 7000 && Number(gateObj.waitMs || 0) <= 12000,
-    termsGateEnablesAfterCheck: gateObj.disabledAfter === false,
+    termsTimerRemoved: gateObj.timerRemoved === true,
+    termsOnlyOneButtonState: gateObj.btnTextBefore === '请先勾选同意',
+    termsButtonNeverDisabled: gateObj.btnHardDisabled === false && gateObj.btnAriaDisabled === '' && gateObj.chkAriaDisabled === '',
+    termsCheckboxNotLocked: gateObj.chkLocked === false,
+    termsButtonCursorPointer: gateObj.btnCursor === 'pointer' && gateObj.btnCursorAfter === 'pointer',
+    termsUncheckedClickHints: /请先勾选/.test(String(gateObj.hintAfterBtn || '')) && gateObj.stillUnchecked === true,
+    termsUncheckedClickNudges: gateObj.nudgeSeen === true,
+    termsCheckboxToggles: gateObj.checkedNow === true && gateObj.btnTextMid === '同意并继续',
     termsGateDismissed: gateObj.gone === true,
     termsHasSections: Number(gateObj.sections || 0) >= 6,
   };
@@ -346,7 +346,7 @@ async function main() {
         return s ? getComputedStyle(s).borderRadius : '';
       })()
     `).catch(() => '')) === '14px',
-    // 界面模式：标准版保留模糊淡入；加上 ui-lite 后动画被彻底关掉
+    // 界面模式：标准版保留页面淡入（现在是纯透明度）；加上 ui-lite 后动画被彻底关掉
     uiModeSwitch: (await win.webContents.executeJavaScript(`
       (() => {
         const el = document.querySelector('.page-fade');
@@ -357,9 +357,51 @@ async function main() {
         const mask = document.querySelector('.modal-mask');
         const blur = mask ? getComputedStyle(mask).backdropFilter : 'nomodal';
         document.body.classList.remove('ui-lite');
-        return (before === 'pageBlurIn' && after === 'none' && (blur === 'none' || blur === 'nomodal')) ? 'ok' : (before + '|' + after + '|' + blur);
+        return (before === 'pageIn' && after === 'none' && (blur === 'none' || blur === 'nomodal')) ? 'ok' : (before + '|' + after + '|' + blur);
       })()
     `).catch(() => 'err')) === 'ok',
+    // 卡片入场：700ms、起始 blur 14px（keyframes）、彼此 0.05s 错峰
+    cardRevealSpec: (await win.webContents.executeJavaScript(`
+      (() => {
+        const probe = document.createElement('div');
+        probe.className = 'card reveal';
+        probe.style.setProperty('--reveal-i', '2');
+        document.body.appendChild(probe);
+        const cs = getComputedStyle(probe);
+        const out = cs.animationName + '|' + cs.animationDuration + '|' + cs.animationDelay;
+        probe.remove();
+        return out;
+      })()
+    `).catch(() => 'err')) === 'cardIn|0.7s|0.1s',
+    cardRevealBlur14: (await win.webContents.executeJavaScript(`
+      (() => {
+        const probe = document.createElement('div');
+        probe.className = 'card reveal';
+        document.body.appendChild(probe);
+        const cs = getComputedStyle(probe);
+        const px = parseFloat((cs.filter.match(/blur\\(([\\d.]+)px\\)/) || [])[1] || '0');
+        probe.remove();
+        return px;
+      })()
+    `).catch(() => -1)) >= 12,
+    // 骨架屏扫光：整体一层光，1.5s 一轮、linear、无限重复；ui-lite 下 animation 直接关掉
+    skeletonShineSpec: (await win.webContents.executeJavaScript(`
+      (() => {
+        const wrap = document.createElement('div');
+        wrap.className = 'sk-scope';
+        const sh = document.createElement('div');
+        sh.className = 'sk-shine';
+        wrap.appendChild(sh);
+        document.body.appendChild(wrap);
+        const a = getComputedStyle(sh, '::before');
+        const spec = a.animationDuration + '|' + a.animationTimingFunction + '|' + a.animationIterationCount;
+        document.body.classList.add('ui-lite');
+        const lite = getComputedStyle(sh, '::before').animationName;
+        document.body.classList.remove('ui-lite');
+        wrap.remove();
+        return spec + '|' + lite;
+      })()
+    `).catch(() => 'err')) === '1.5s|linear|infinite|none',
     // 液态玻璃：标准版默认开（body 有 ui-liquid，浮层带 url(#lg-refract) 折射滤镜）；
     // 加 ui-lite 后不再生效；摘掉 ui-liquid 后回到普通毛玻璃
     glassSwitch: (await win.webContents.executeJavaScript(`
@@ -379,18 +421,14 @@ async function main() {
         return [bodyHas, /url\\(/.test(on) ? 'url' : on, /none/.test(lite) ? 'none' : lite, off, hasFilterDef].join('|');
       })()
     `).catch(() => 'err')) === 'true|url|none|none|true',
-    // 鼠标聚光：标准版有这一层，简洁版整层不渲染，且不接收鼠标事件
-    spotlightLayer: (await win.webContents.executeJavaScript(`
+    // 鼠标聚光已移除（v1.1.6）：页面里不应再有 .spotlight 层
+    spotlightRemoved: (await win.webContents.executeJavaScript(`
       (() => {
-        const s = document.querySelector('.spotlight');
-        if (!s) return 'missing';
-        const std = getComputedStyle(s);
-        document.body.classList.add('ui-lite');
-        const lite = getComputedStyle(s).display;
-        document.body.classList.remove('ui-lite');
-        return [std.display, std.pointerEvents, lite, s.getAttribute('aria-hidden')].join('|');
+        const n = document.querySelectorAll('.spotlight').length;
+        const withSpot = [...document.querySelectorAll('.app-bg-layer, .login-bg-layer')].length;
+        return [n, withSpot >= 0].join('|');
       })()
-    `).catch(() => 'err')) === 'block|none|none|true',
+    `).catch(() => 'err')) === '0|true',
   };
   Object.entries(dashChecks).forEach(([k, v]) => log((v ? 'PASS ' : 'FAIL ') + k));
 
@@ -566,7 +604,7 @@ async function main() {
       .every((t) => setText.includes(t)),
     pageFadeAnimation: (await win.webContents.executeJavaScript(
       'getComputedStyle(document.querySelector(".set-pane")).animationName'
-    ).catch(() => '')) === 'pageBlurIn',
+    ).catch(() => '')) === 'pageIn',
   };
 
   /* ---- 外观与背景栏目：多张背景 + 个性化配色同屏 ---- */

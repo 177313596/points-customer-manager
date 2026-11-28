@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { api, fmtMoney, parseMoneyToCents, sanitizeMoneyInput } from '../utils';
-import { Icon, Empty } from '../ui';
+import { Icon, Empty, RollNumber } from '../ui';
 import TxModal, { CustomerPicker } from './TxModal';
 
 function Stat({ icon, label, value, sub, tone }) {
@@ -16,7 +16,7 @@ function Stat({ icon, label, value, sub, tone }) {
   );
 }
 
-export default function Dashboard({ settings, overview, call, refresh, notify, bump }) {
+export default function Dashboard({ settings, overview, call, refresh, notify, bump, rollNumbers = true }) {
   const [pick, setPick] = useState(null);
   const [modal, setModal] = useState(null);
   const [amount, setAmount] = useState('');
@@ -114,13 +114,13 @@ export default function Dashboard({ settings, overview, call, refresh, notify, b
     <div className="dash">
       <section className="stats">
         <Stat icon="wallet" label="今日消费额" tone="primary"
-          value={fmtMoney(ov.today_amount_cents || 0)}
+          value={<RollNumber value={ov.today_amount_cents || 0} format={fmtMoney} animate={rollNumbers} />}
           sub={`今日 ${ov.today_tx_count || 0} 笔交易`} />
         <Stat icon="spark" label="今日新增积分"
-          value={(ov.today_points || 0) + ' 分'}
+          value={<RollNumber value={ov.today_points || 0} format={(n) => Math.round(n) + ' 分'} animate={rollNumbers} />}
           sub={`累计发放 ${ov.redeemed_points_total || 0} 分已兑换`} />
         <Stat icon="users" label="会员总数"
-          value={ov.customers || 0}
+          value={<RollNumber value={ov.customers || 0} animate={rollNumbers} />}
           sub={`今日新增 ${ov.today_new_customers || 0} 人`} />
       </section>
 

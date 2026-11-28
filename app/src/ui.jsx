@@ -68,61 +68,118 @@ export function GlassDefs() {
   );
 }
 
-/** 鼠标聚光：跟着指针缓慢滑动的柔光，铺在背景层之上、内容卡片之下（标准版专属，简洁版由 CSS 关掉）
-    只改 transform，走 rAF + 缓动，指针静止 2.5 秒后淡出，避免一直亮着抢注意力 */
-export function Spotlight() {
-  const ref = useRef(null);
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return undefined;
-    let tx = window.innerWidth * 0.62;
-    let ty = window.innerHeight * 0.45;
-    let cx = tx;
-    let cy = ty;
-    let raf = 0;
-    let idleTimer = 0;
+/** 说明：鼠标聚光（Spotlight）已整体移除——原先跟随指针滑动的白色柔光叠在背景之上，
+    浅色背景图下会显得脏，还会和玻璃菜单的折射光影互相干扰。NavPill 只做菜单胶囊，不跟随指针。 */
 
-    const step = () => {
-      const dx = tx - cx;
-      const dy = ty - cy;
-      if (Math.abs(dx) < 0.4 && Math.abs(dy) < 0.4) {
-        cx = tx; cy = ty;
-        el.style.transform = `translate3d(${Math.round(cx)}px, ${Math.round(cy)}px, 0)`;
-        raf = 0;
+/** 菜单当前项的「玻璃胶囊」：整块半透明胶囊滑到当前项下面。
+    动效不是 CSS transition，而是每帧做弹簧积分（阻尼偏小，到位会小幅过冲再回弹）：
+      加速度 = -K*(位置-目标) - C*速度
+    移动中按速度沿运动方向拉伸、垂直方向压扁，速度归零后自动缩回原形，
+    所以「起步拉长 → 滑行 → 到位回弹」是一个连续过程，而不是两段动画拼接。
+    简洁版 / 系统降低动效：直接吸附到位，不跑 rAF。
+    用法：容器 ref + activeKey（当前项变化即重新测量）+ 可选 className（暗底/亮底两套玻璃配方）。 */
+export function NavPill({ hostRef, activeKey, axis = 'y', className = 'nav-pill', maxStretch = 0.2 }) {
+  const ref = useRef(null);
+  // 位置/速度/目标放 ref 里、跨 effect 保留：切换菜单时从「当前位置」接着滑，而不是回到原点
+  const st = useRef({ cx: 0, cy: 0, w: 0, h: 0, vx: 0, vy: 0, tcx: 0, tcy: 0, ready: false, raf: 0, last: 0 });
+
+  useEffect(() => {
+    const host = hostRef.current;
+    const pill = ref.current;
+    if (!host || !pill) return undefined;
+    const s = st.current;
+
+    const K = 260;   // 刚度：ω≈16.1 rad/s，约 0.3s 到位
+    const C = 21;    // 阻尼：ζ≈0.65，过冲约 8%，到位有回弹但不晃
+    const SPEED_TO_STRETCH = 5.2e-4;  // 速度(px/s) → 拉伸比例
+
+    const instant = () => document.body.classList.contains('ui-lite')
+      || (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+
+    const paint = () => {
+      const v = axis === 'y' ? s.vy : s.vx;
+      const stretch = Math.min(maxStretch, Math.abs(v) * SPEED_TO_STRETCH);
+      const along = 1 + stretch;        // 沿运动方向拉长
+      const cross = 1 - stretch * 0.45; // 垂直方向压扁，像被拖着走的软胶囊
+      const sx = axis === 'x' ? along : cross;
+      const sy = axis === 'y' ? along : cross;
+      const x = s.cx - s.w / 2;
+      const y = s.cy - s.h / 2;
+      pill.style.transform = `translate3d(${x.toFixed(2)}px, ${y.toFixed(2)}px, 0) scale(${sx.toFixed(4)}, ${sy.toFixed(4)})`;
+    };
+
+    const step = (t) => {
+      const dt = Math.min(0.034, (t - (s.last || t - 16)) / 1000);
+      s.last = t;
+      s.vx += (-K * (s.cx - s.tcx) - C * s.vx) * dt;
+      s.vy += (-K * (s.cy - s.tcy) - C * s.vy) * dt;
+      s.cx += s.vx * dt;
+      s.cy += s.vy * dt;
+      paint();
+      const settled = Math.abs(s.cx - s.tcx) < 1.2 && Math.abs(s.cy - s.tcy) < 1.2
+        && Math.abs(s.vx) < 12 && Math.abs(s.vy) < 12;
+      if (settled) {
+        s.cx = s.tcx; s.cy = s.tcy; s.vx = 0; s.vy = 0;
+        paint();
+        s.raf = 0;
         return;
       }
-      cx += dx * 0.13;
-      cy += dy * 0.13;
-      el.style.transform = `translate3d(${Math.round(cx)}px, ${Math.round(cy)}px, 0)`;
-      raf = requestAnimationFrame(step);
+      s.raf = requestAnimationFrame(step);
     };
-    const kick = () => { if (!raf) raf = requestAnimationFrame(step); };
+    const kick = () => { if (!s.raf) { s.last = 0; s.raf = requestAnimationFrame(step); } };
 
-    const onMove = (e) => {
-      const host = el.parentElement;
-      const r = host ? host.getBoundingClientRect() : { left: 0, top: 0 };
-      tx = e.clientX - r.left;
-      ty = e.clientY - r.top;
-      el.classList.add('on');
-      clearTimeout(idleTimer);
-      idleTimer = setTimeout(() => el.classList.remove('on'), 4500);
+    const measure = (snap) => {
+      const el = host.querySelector(':scope > .active') || host.querySelector('.active');
+      if (!el) { pill.style.opacity = '0'; return; }
+      /* 用布局坐标（offsetTop / offsetWidth）而不是 getBoundingClientRect：
+         卡片悬停时整块卡片带 ≤4° 的 3D 倾斜，rect 是透视投影后的值，
+         拿屏幕空间的偏移量去写卡片内的 translate3d 会落到错的位置（越大越偏）；
+         offsetTop 是布局内的真实位置，不受 transform 影响。 */
+      let top = 0;
+      let left = 0;
+      let cur = el;
+      while (cur && cur !== host) { top += cur.offsetTop; left += cur.offsetLeft; cur = cur.offsetParent; }
+      const w = el.offsetWidth;
+      const h = el.offsetHeight;
+      if (!w || !h) { pill.style.opacity = '0'; return; }
+      s.w = w;
+      s.h = h;
+      s.tcx = left + w / 2;
+      s.tcy = top + h / 2;
+      pill.style.width = w + 'px';
+      pill.style.height = h + 'px';
+      pill.style.opacity = '1';
+      if (snap || !s.ready || instant()) {
+        s.cx = s.tcx; s.cy = s.tcy; s.vx = 0; s.vy = 0; s.ready = true;
+        if (s.raf) { cancelAnimationFrame(s.raf); s.raf = 0; }
+        paint();
+        return;
+      }
       kick();
     };
-    const onLeave = () => { el.classList.remove('on'); };
 
-    el.style.transform = `translate3d(${Math.round(cx)}px, ${Math.round(cy)}px, 0)`;
-    window.addEventListener('pointermove', onMove, { passive: true });
-    window.addEventListener('pointerdown', onMove, { passive: true });
-    document.addEventListener('pointerleave', onLeave, { passive: true });
+    // 首帧等排版稳定（字体加载、滚动条都会影响 rect）；activeKey 变化时 DOM 已写好 .active，可直接量
+    const boot = s.ready ? 0 : requestAnimationFrame(() => measure(true));
+    let roFirst = true;
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(() => {
+      // observe 时的第一次回调只是初始通知，此时不能 snap，否则会把刚启动的弹簧拍到位
+      if (roFirst) { roFirst = false; return; }
+      measure(true);
+    }) : null;
+    if (ro) ro.observe(host);
+    const onResize = () => measure(true);
+    window.addEventListener('resize', onResize);
+
+    measure(false);
     return () => {
-      if (raf) cancelAnimationFrame(raf);
-      clearTimeout(idleTimer);
-      window.removeEventListener('pointermove', onMove);
-      window.removeEventListener('pointerdown', onMove);
-      document.removeEventListener('pointerleave', onLeave);
+      if (boot) cancelAnimationFrame(boot);
+      if (s.raf) { cancelAnimationFrame(s.raf); s.raf = 0; }
+      if (ro) ro.disconnect();
+      window.removeEventListener('resize', onResize);
     };
-  }, []);
-  return <div ref={ref} className="spotlight" aria-hidden="true" />;
+  }, [hostRef, activeKey, axis, maxStretch]);
+
+  return <div ref={ref} className={'nav-glass-pill ' + className} aria-hidden="true" />;
 }
 
 /** 带“小眼睛”的密码输入框：点击右侧图标可切换显示/隐藏 */
@@ -216,6 +273,40 @@ export function Empty({ icon = 'database', title, desc, action }) {
       {action}
     </div>
   );
+}
+
+/* 数字滚动：挂载时从 0 滚到目标值（进入主界面时用），之后的数据刷新直接改成新值，
+   不重复滚。animate=false（比如已经滚过一次）时直接显示终值。
+   简洁版 / 系统减弱动效时同样直接用最终值。 */
+export function RollNumber({ value = 0, format = (n) => String(Math.round(n)), duration = 900, animate = true }) {
+  const target = Number.isFinite(Number(value)) ? Number(value) : 0;
+  const [shown, setShown] = useState(target);
+  const first = useRef(true);
+
+  useEffect(() => {
+    if (!animate) { setShown(target); return () => { }; }
+    const lite = document.body.classList.contains('ui-lite')
+      || (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+    if (lite || !target) { setShown(target); return () => { }; }
+    let raf = 0;
+    let start = 0;
+    const step = (ts) => {
+      if (!start) start = ts;
+      const t = Math.min(1, (ts - start) / duration);
+      setShown(target * (1 - Math.pow(1 - t, 3)));
+      if (t < 1) raf = requestAnimationFrame(step);
+      else setShown(target);
+    };
+    raf = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(raf);
+  }, []);
+
+  useEffect(() => {
+    if (first.current) { first.current = false; return; }
+    setShown(target);
+  }, [target]);
+
+  return <span className="roll-num">{format(shown)}</span>;
 }
 
 export function Switch({ checked, onChange, label, disabled = false }) {

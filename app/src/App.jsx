@@ -1,12 +1,13 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { api, fmtMoney, relativeTime } from './utils';
-import { Icon, Modal, GlassDefs, Spotlight } from './ui';
+import { Icon, Modal, GlassDefs, NavPill, RollNumber } from './ui';
 import Login from './components/Login';
 import Dashboard from './components/Dashboard';
 import Customers from './components/Customers';
 import Records from './components/Records';
 import DataIO from './components/DataIO';
 import SettingsPage from './components/SettingsPage';
+import { MainSkeleton } from './skeleton';
 import { applyTheme } from './theme';
 import brandLogo from './assets/brand-logo.png';
 
@@ -20,7 +21,6 @@ const PAGES = [
 
 export default function App() {
   const [authed, setAuthed] = useState(false);
-  const [boot, setBoot] = useState(true);
   const [settings, setSettings] = useState(null);
   const [overview, setOverview] = useState(null);
   const [page, setPage] = useState('dashboard');
@@ -33,6 +33,16 @@ export default function App() {
   const [elevatedUntil, setElevatedUntil] = useState(0);
   const [nowTs, setNowTs] = useState(Date.now());
   const [syncState, setSyncState] = useState({ at: '', error: '' });
+  /* 进入主界面的加载：entryReady = 首屏数据齐了（settings + stats），dataDone 是真实完成的步数。
+     骨架屏只在这段用；之后的刷新不会再回到骨架。 */
+  const [entryReady, setEntryReady] = useState(false);
+  const [dataDone, setDataDone] = useState(0);
+  const [rollDone, setRollDone] = useState(false); // 数字只滚一次：进主界面滚完就置位
+  const DATA_STEPS = 2;
+  /* 注册完成后延迟到主界面才弹出的「可设置二级密码」提醒 */
+  const [opPrompt, setOpPrompt] = useState(false);
+  const [opPromptOpen, setOpPromptOpen] = useState(false);
+  const navRef = useRef(null);
   const opResolver = useRef(null);
   const toastTimer = useRef(null);
   const [appBgIdx, setAppBgIdx] = useState(0);
@@ -79,15 +89,17 @@ export default function App() {
     toastTimer.current = setTimeout(() => setToast(null), 3200);
   }, []);
 
+  /* 首屏数据：settings 与 stats 两个真实请求，每完成一个就把进度条往前挪一格。
+     进度只来自这两个请求真正 resolve 的时刻，不做任何假推进。 */
   const loadAll = useCallback(async () => {
-    const [s, o] = await Promise.all([api.settings.get(), api.stats()]);
-    if (s.ok) setSettings(s.data);
-    if (o.ok) setOverview(o.data);
-  }, []);
-
-  useEffect(() => {
-    const t = setTimeout(() => setBoot(false), 500);
-    return () => clearTimeout(t);
+    setDataDone(0);
+    const jobs = [
+      api.settings.get().then((s) => { if (s && s.ok) setSettings(s.data); }),
+      api.stats().then((o) => { if (o && o.ok) setOverview(o.data); }),
+    ];
+    await Promise.all(jobs.map((p) => p
+      .catch(() => { })
+      .then(() => setDataDone((n) => n + 1))));
   }, []);
 
   // 个性化配色：settings.theme 一变就写进 :root
@@ -96,9 +108,20 @@ export default function App() {
     applyTheme(settings.theme);
   }, [settings && settings.theme && settings.theme.accent]);
 
+  /* 登录成功 → 主界面：先摆骨架屏，等两个真实请求都回来，再留一点时间让填充条真的走到位
+     （至少露 520ms；数据回来得晚也至少留 320ms 把最后一次位移放完），然后切真实界面。 */
   useEffect(() => {
-    if (!authed) return;
-    loadAll();
+    if (!authed) { setEntryReady(false); setDataDone(0); return; }
+    let alive = true;
+    const t0 = performance.now();
+    (async () => {
+      await loadAll();
+      const elapsed = performance.now() - t0;
+      const rest = Math.max(520 - elapsed, 320);
+      await new Promise((r) => setTimeout(r, rest));
+      if (alive) setEntryReady(true);
+    })();
+    return () => { alive = false; };
   }, [authed, loadAll]);
 
   const refresh = useCallback(() => {
@@ -173,11 +196,51 @@ export default function App() {
     return () => clearInterval(t);
   }, [authed]);
 
-  if (boot) return <><div className="splash"><div className="loading-dot" /></div><GlassDefs /><WinChrome /></>;
-  if (!authed) return <><Login onAuthed={(opts) => {
+  /* 卡片入场：进主界面 / 换页面时，把当前页的卡片按 DOM 顺序编号（--reveal-i），
+     CSS 用编号算出 0.05s 的错峰延迟，每张卡从 blur(14px) + 透明回到正常，700ms。
+     用 layout effect 是为了在首次绘制之前就把类名挂上，否则会先看到一帧"已经清晰"的卡片。 */
+  useLayoutEffect(() => {
+    if (!entryReady) return;
+    const root = document.querySelector('.content');
+    if (!root) return;
+    const cards = Array.from(root.querySelectorAll('.card, .stat-card'));
+    cards.forEach((el, i) => {
+      el.style.setProperty('--reveal-i', String(Math.min(i, 14)));
+      el.classList.add('reveal');
+    });
+  }, [page, entryReady]);
+
+  /* 注册完成时的那次「可设置二级密码」提醒，等主界面入场动画（卡片 700ms + 错峰）走完再弹 */
+  useEffect(() => {
+    if (!opPrompt || !entryReady) return;
+    const t = setTimeout(() => setOpPromptOpen(true), 1100);
+    return () => clearTimeout(t);
+  }, [opPrompt, entryReady]);
+
+  /* 数字滚动只在"这次进入主界面"发生一次：滚完（900ms + 余量）后置位，
+     之后在工作台/其它页面之间来回切不再重滚 */
+  useEffect(() => {
+    if (!entryReady) { setRollDone(false); return; }
+    const t = setTimeout(() => setRollDone(true), 1200);
+    return () => clearTimeout(t);
+  }, [entryReady]);
+
+  function closeOpPrompt(goSettings) {
+    setOpPromptOpen(false);
+    setOpPrompt(false);
+    if (goSettings) { setSettingsTab('security'); setPage('settings'); }
+  }
+
+  if (!authed) return <><Login onAuthed={(opts = {}) => {
     setAuthed(true);
-    if (opts && opts.page) { setPage(opts.page); setSettingsTab(opts.tab || ''); }
+    if (opts.page) { setPage(opts.page); setSettingsTab(opts.tab || ''); }
+    if (opts.opPrompt) setOpPrompt(true);
   }} /><GlassDefs /><WinChrome /></>;
+
+  // 进入主界面的加载阶段：骨架按工作台的真实布局摆，填充条只随真实请求推进
+  if (!entryReady) {
+    return <><MainSkeleton progress={Math.min(1, dataDone / DATA_STEPS)} /><GlassDefs /><WinChrome /></>;
+  }
 
   const meta = PAGES.find((p) => p.key === page);
   const elevatedLeft = Math.max(0, Math.floor((elevatedUntil - nowTs) / 1000));
@@ -187,6 +250,16 @@ export default function App() {
   return (
     <>
     <div className="shell">
+      {/* 背景图铺满整个外壳（含左侧菜单下方的间隙），菜单玻璃才能透过它 */}
+      {appBgs.length ? (
+        <div className="app-bg-stack" aria-hidden="true">
+          <div
+            key={appBgs[appBgIdx]}
+            className="app-bg-layer"
+            style={{ backgroundImage: `url("${appBgs[appBgIdx]}")` }}
+          />
+        </div>
+      ) : null}
       <aside className="sidebar">
         <div className="side-brand">
           <img className="brand-logo" src={brandLogo} alt="积分客户管理系统" draggable={false} />
@@ -196,7 +269,8 @@ export default function App() {
           </div>
         </div>
 
-        <nav className="side-nav">
+        <nav className="side-nav" ref={navRef}>
+          <NavPill hostRef={navRef} activeKey={page} />
           {PAGES.map((p) => (
             <button key={p.key} className={'nav-item' + (page === p.key ? ' active' : '')} onClick={() => {
               if (p.key === 'settings') setSettingsTab('');
@@ -212,11 +286,11 @@ export default function App() {
         <div className="side-foot">
           <div className="side-stat">
             <span>会员总数</span>
-            <strong>{overview?.customers ?? '—'}</strong>
+            <strong>{overview ? <RollNumber value={overview.customers || 0} /> : '—'}</strong>
           </div>
           <div className="side-stat">
             <span>待兑换积分</span>
-            <strong>{overview?.total_points ?? '—'}</strong>
+            <strong>{overview ? <RollNumber value={overview.total_points || 0} /> : '—'}</strong>
           </div>
           <button className="btn btn-ghost btn-block" onClick={async () => { await api.logout(); setAuthed(false); }}>
             <Icon name="exit" size={15} />退出登录
@@ -225,16 +299,6 @@ export default function App() {
       </aside>
 
       <main className={'main' + (appBgs.length ? ' has-app-bg' : '')}>
-        {appBgs.length ? (
-          <div className="app-bg-stack" aria-hidden="true">
-            <div
-              key={appBgs[appBgIdx]}
-              className="app-bg-layer"
-              style={{ backgroundImage: `url("${appBgs[appBgIdx]}")` }}
-            />
-          </div>
-        ) : null}
-        <Spotlight />
         <header className="topbar">
           <div>
             <h2>{meta.label}</h2>
@@ -268,7 +332,7 @@ export default function App() {
         <div className="content">
           <div className="page-fade" key={page}>
             {page === 'dashboard' ? (
-              <Dashboard settings={settings} overview={overview} call={call} refresh={refresh} notify={notify} bump={bump} />
+              <Dashboard settings={settings} overview={overview} call={call} refresh={refresh} notify={notify} bump={bump} rollNumbers={!rollDone} />
             ) : null}
             {page === 'customers' ? (
               <Customers settings={settings} call={call} refresh={refresh} notify={notify} bump={bump} />
@@ -285,6 +349,26 @@ export default function App() {
           </div>
         </div>
       </main>
+
+      {/* 注册完成后的提醒（此时已经进主界面）：二级操作密码默认关闭，可随时去设置里开启 */}
+      <Modal
+        open={opPromptOpen}
+        title="初始化完成"
+        subtitle="二级操作密码（可选 · 默认关闭）"
+        onClose={() => closeOpPrompt(false)}
+        footer={(
+          <>
+            <button className="btn btn-ghost" onClick={() => closeOpPrompt(false)} type="button">稍后再说</button>
+            <button className="btn btn-primary" onClick={() => closeOpPrompt(true)} type="button">现在去设置</button>
+          </>
+        )}
+      >
+        <p className="io-note" style={{ marginTop: 0 }}>系统已创建完成，现在只用登录密码即可进入。</p>
+        <p className="io-note">
+          如需给消费、兑换、导入、修改设置等敏感操作再加一道验证，可前往「设置 → 安全设置」开启二级操作密码。
+          开启后每次登录只需验证一次；之后连续 5 分钟内有操作就一直免验证，超过 5 分钟没操作才会重新要求输入（手动调整积分每次都需输入）。
+        </p>
+      </Modal>
 
       <Modal
         open={opOpen}
@@ -366,3 +450,4 @@ function WinChrome() {
     </>
   );
 }
+

@@ -276,8 +276,6 @@ p { margin: 0; }
 }
 .terms-consent:hover { background: #EFF7F4; border-color: #BFDCD4; }
 .terms-consent.on { background: #EAF6F1; border-color: #9FD0C2; }
-.terms-consent.locked { background: #F7F9F9; border-color: #E6EBEA; color: #7C8C90; }
-.terms-consent.locked:hover { background: #F4F7F7; border-color: #DDE5E4; }
 .terms-consent:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
 /* 勾选方框：视觉 18×18，外面套 36×36 透明热区，点哪都能勾上 */
 .terms-hit {
@@ -305,8 +303,16 @@ p { margin: 0; }
   box-shadow: 0 2px 6px rgba(15, 118, 110, .30);
 }
 .terms-consent:hover .terms-box.on { box-shadow: 0 0 0 3px rgba(15, 118, 110, .16), 0 2px 6px rgba(15, 118, 110, .30); }
-.terms-consent.locked .terms-box { background: #F2F5F5; border-color: #DCE4E3; box-shadow: none; color: transparent; }
-.terms-consent.locked:hover .terms-box { border-color: #DCE4E3; box-shadow: none; }
+/* 未勾选就点"同意"时，勾选行轻轻晃一下（只动 4px、0.6s 内结束） */
+.terms-consent.nudge { animation: termsNudge .6s cubic-bezier(.36, .07, .19, .97); }
+.terms-consent.nudge .terms-box { border-color: #E0A96A; box-shadow: 0 0 0 3px rgba(224, 169, 106, .18); }
+@keyframes termsNudge {
+  0%, 100% { transform: translateX(0); }
+  18% { transform: translateX(-4px); }
+  38% { transform: translateX(4px); }
+  58% { transform: translateX(-3px); }
+  78% { transform: translateX(2px); }
+}
 .terms-hint {
   margin: 8px 24px 0; padding: 8px 12px;
   background: #FDF3E7; border: 1px solid #F3DFC4; border-radius: 10px;
@@ -314,18 +320,11 @@ p { margin: 0; }
   visibility: visible;
 }
 .terms-hint.is-empty { background: transparent; border-color: transparent; color: transparent; visibility: hidden; }
-.terms-timer {
-  flex: 0 0 auto; padding: 4px 10px; border-radius: 999px;
-  background: #FDF3E7; color: #B26A16; font-size: 11.5px; font-weight: 600;
-  white-space: nowrap;
-}
-.terms-timer.done { background: #EAF7F2; color: #0F766E; }
 .terms-foot { padding: 14px 24px 20px; cursor: pointer; -webkit-app-region: no-drag; }
-.terms-foot .btn { min-height: 38px; }
-.terms-foot .btn.is-idle { opacity: .62; }
+.terms-foot .btn { min-height: 38px; cursor: pointer; }
 
 /* ============ 主框架 ============ */
-.shell { height: 100%; display: flex; overflow: hidden; }
+.shell { height: 100%; display: flex; overflow: hidden; position: relative; }
 .sidebar {
   width: 236px; flex: 0 0 236px;
   background: linear-gradient(180deg, var(--nav-1) 0%, var(--nav-2) 100%);
@@ -335,19 +334,40 @@ p { margin: 0; }
 .side-brand { display: flex; align-items: center; gap: 10px; padding: 4px 6px 20px; }
 .side-brand strong { display: block; font-size: 13.5px; color: #fff; line-height: 1.3; }
 .side-brand span { font-size: 11px; color: #7B9A95; }
-.side-nav { display: grid; gap: 3px; }
+.side-nav { display: grid; gap: 3px; position: relative; }
 .nav-item {
   display: flex; align-items: center; gap: 10px;
   height: 40px; padding: 0 12px; border-radius: 10px;
   border: 0; background: transparent; color: #A9C2BD;
-  font-size: 13.5px; text-align: left; position: relative;
+  font-size: 13.5px; text-align: left; position: relative; z-index: 1;
   transition: background .15s, color .15s;
 }
-.nav-item:hover { background: rgba(255, 255, 255, .05); color: #D9EDE9; }
-.nav-item.active { background: rgba(255, 255, 255, .08); color: var(--nav-ink); font-weight: 500; }
-.nav-item.active::before {
-  content: ""; position: absolute; left: 0; top: 11px; bottom: 11px; width: 3px;
-  background: var(--primary); border-radius: 0 3px 3px 0;
+.nav-item:not(.active):hover { background: rgba(255, 255, 255, .05); color: #D9EDE9; }
+.nav-item.active { background: transparent; color: var(--nav-ink); font-weight: 500; }
+
+/* 菜单当前项：半透明玻璃胶囊（元素本身由 NavPill 组件创建，位置和拉伸由 JS 弹簧驱动）
+   三层：① 冷白渐变底 —— 玻璃的体 ② backdrop-filter 模糊+提饱和 —— 玻璃的透
+        ③ inset 描边 + 内侧顶光 —— 边缘那一圈细高光 */
+.nav-glass-pill {
+  position: absolute; left: 0; top: 0; z-index: 0;
+  border-radius: 10px;
+  pointer-events: none;
+  opacity: 0;
+  transform-origin: 50% 50%;
+  will-change: transform;
+}
+.nav-pill {
+  background:
+    radial-gradient(130% 86% at 20% -10%, rgba(255, 255, 255, .30) 0%, rgba(255, 255, 255, 0) 58%),
+    linear-gradient(157deg, rgba(255, 255, 255, .16) 0%, rgba(255, 255, 255, .05) 52%, rgba(255, 255, 255, .11) 100%);
+  -webkit-backdrop-filter: blur(9px) saturate(1.45);
+  backdrop-filter: blur(9px) saturate(1.45);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, .36),
+    inset 0 1px 0 rgba(255, 255, 255, .70),
+    inset 0 -1px 0 rgba(0, 0, 0, .18),
+    inset 0 -8px 12px -10px rgba(0, 0, 0, .35),
+    0 6px 18px rgba(1, 16, 14, .30);
 }
 .dot-badge {
   margin-left: auto; font-style: normal; font-size: 10.5px;
@@ -361,9 +381,10 @@ p { margin: 0; }
 .side-foot .btn-ghost { background: rgba(255, 255, 255, .06); border-color: rgba(255, 255, 255, .12); color: #B9D2CD; margin-top: 4px; }
 .side-foot .btn-ghost:hover { background: rgba(255, 255, 255, .1); }
 
-.main { flex: 1; display: flex; flex-direction: column; min-width: 0; position: relative; overflow: hidden; }
-/* 登录后的主界面背景：沿用登录页背景图，铺满在顶栏 + 内容区之下（卡片和文字浮在上面） */
-.main.has-app-bg { background: #F4F6F8; }
+.main { flex: 1; display: flex; flex-direction: column; min-width: 0; position: relative; z-index: 1; overflow: hidden; }
+/* 登录后的主界面背景：背景图铺在外壳最底层（.shell 里），菜单与内容都在它上面。
+   .main 只保留一层兜底色，且背景图存在时要透明，否则会在自己这块区域把图盖住 */
+.main.has-app-bg { background: transparent; }
 .app-bg-stack { position: absolute; inset: 0; overflow: hidden; z-index: 0; pointer-events: none; }
 .app-bg-layer {
   position: absolute; inset: 0;
@@ -372,25 +393,7 @@ p { margin: 0; }
 }
 .main > .topbar, .main > .content { position: relative; z-index: 1; }
 
-/* 鼠标聚光（标准版）：柔光跟着指针滑，压在背景层之上、卡片之下；简洁版整层不渲染 */
-.spotlight {
-  position: absolute; left: 0; top: 0;
-  width: 760px; height: 760px;
-  margin-left: -380px; margin-top: -380px;
-  pointer-events: none; z-index: 0;
-  background: radial-gradient(closest-side,
-    rgba(255, 255, 255, .30) 0%,
-    rgba(255, 255, 255, .18) 22%,
-    color-mix(in srgb, var(--primary) 12%, transparent) 48%,
-    color-mix(in srgb, var(--primary) 7%, transparent) 68%,
-    transparent 88%);
-  opacity: 0;
-  transition: opacity .55s ease;
-  will-change: transform;
-  transform: translate3d(0, 0, 0);
-}
-.spotlight.on { opacity: 1; }
-body.ui-lite .spotlight { display: none !important; }
+/* 鼠标聚光已移除（v1.1.6）：不再有跟随指针的柔光层，背景只留背景图本身 */
 .topbar {
   display: flex; align-items: center; justify-content: space-between;
   padding: 32px 132px 14px 26px; gap: 16px;
@@ -415,10 +418,12 @@ body.ui-lite .spotlight { display: none !important; }
 .content { flex: 1; overflow-y: auto; padding: 0 26px 26px; }
 
 /* 页面 / 栏目切换：高斯模糊淡入 */
-.page-fade { animation: pageBlurIn .34s cubic-bezier(.2, .7, .3, 1) both; will-change: opacity, filter, transform; }
-@keyframes pageBlurIn {
-  from { opacity: 0; filter: blur(10px); transform: translateY(8px); }
-  to   { opacity: 1; filter: blur(0); transform: none; }
+/* 页面切换只做一层很快的淡入；模糊入场交给每张卡片自己做（见文末「卡片入场」），
+   两层模糊叠在一起会糊成一片，也会白烧一次全屏 filter */
+.page-fade { animation: pageIn .24s ease both; }
+@keyframes pageIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
 }
 
 /* ============ 卡片 / 表格 ============ */
@@ -730,12 +735,25 @@ body.ui-lite .spotlight { display: none !important; }
   display: flex; align-items: center; gap: 10px; text-align: left;
   padding: 9px 10px; border: none; border-radius: 10px; background: transparent;
   color: var(--ink-2); cursor: pointer; transition: background .16s, color .16s;
+  position: relative; z-index: 1;
 }
 .set-nav-item svg { color: var(--muted); flex: none; transition: color .16s; }
-.set-nav-item:hover { background: #F3F7F7; }
-.set-nav-item.active { background: var(--primary-soft); color: var(--primary-dark); }
+.set-nav-item:not(.active):hover { background: #F3F7F7; }
+.set-nav-item.active { background: transparent; color: var(--primary-dark); }
 .set-nav-item.active svg { color: var(--primary); }
 .set-nav-item.active .set-nav-txt strong { color: var(--primary-dark); }
+/* 设置页二级栏目：同一套玻璃胶囊，但底是浅色卡片，改用更亮的玻璃配方（边缘高光偏青绿） */
+.set-pill {
+  border-radius: 10px;
+  background: linear-gradient(155deg, rgba(255, 255, 255, .96) 0%, rgba(240, 248, 247, .78) 58%, rgba(232, 243, 241, .88) 100%);
+  -webkit-backdrop-filter: blur(8px) saturate(1.2);
+  backdrop-filter: blur(8px) saturate(1.2);
+  box-shadow:
+    inset 0 0 0 1px rgba(15, 118, 110, .18),
+    inset 0 1px 0 rgba(255, 255, 255, .95),
+    inset 0 -1px 0 rgba(15, 118, 110, .08),
+    0 4px 12px rgba(15, 42, 54, .08);
+}
 .set-nav-txt { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .set-nav-txt strong { font-size: 13px; font-weight: 600; }
 .set-nav-txt small { font-size: 11px; color: var(--muted); line-height: 1.3; }
@@ -873,7 +891,7 @@ input, select, textarea, .cloud-head, .db-path, .result-box, .toast,
 .theme-color, .pw-eye { border-radius: var(--r-xs); }
 
 /* 胶囊：形状不动，只保证全站一致 */
-.chip, .switch, .bg-thumb-idx, .tag, .terms-timer, .login-terms-link, .chip-soft { border-radius: 999px; }
+.chip, .switch, .bg-thumb-idx, .tag, .login-terms-link, .chip-soft { border-radius: 999px; }
 
 /* ============ 界面模式：简洁版（ui-lite） ============
    目标：低配电脑 / 老机器更流畅。做法是"直接砍掉开销"，不是调参数。
@@ -894,6 +912,12 @@ body.ui-lite .loading-dot::after {
   animation: inherit;
 }
 body.ui-lite .modal-mask { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; background: rgba(8, 24, 32, .55); }
+/* 简洁版：胶囊保留（否则看不出选中项），但不做模糊与弹簧（弹簧在 NavPill 里检测 ui-lite 后直接吸附） */
+body.ui-lite .nav-pill,
+body.ui-lite .set-pill {
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
 body.ui-lite .login-bg-stack,
 body.ui-lite .login-bg-layer,
 body.ui-lite .app-bg-stack,
@@ -938,6 +962,218 @@ body.ui-lite .login-left { background: var(--nav-2); }
 .ui-mode-card.active strong { color: var(--primary); }
 body.ui-lite .ui-mode-card { transition: none; }
 
+/* ============ 磨砂玻璃卡片 + 光标光斑 + 4° 3D 倾斜 ============
+   作用面：内容卡片 .card、统计卡 .stat-card、登录卡 .login-card、
+          左侧菜单 .sidebar（本轮单独拆成一张浮起来的卡片）、设置页二级栏目 .set-nav。
+   材质三层：① 冷白渐变 —— 玻璃的体 ② backdrop-filter 磨砂 —— 玻璃的透
+            ③ 内侧 1px 高光边 + 柔和投影 —— 玻璃的边与厚度
+   交互三层（由 src/glass.js 写入 CSS 变量，不经过 React）：
+            · --mx/--my：光斑中心（卡片内 px），驱动 ::before 的柔和径向光
+            · 同一组坐标驱动 ::after 的"边框局部提亮"（mask 裁成 1px 环）
+            · --tx/--ty：rotateX/rotateY 的度数，指针偏离中心越远越大，上限 4°，
+              指针移出后归零并由 .is-cool 的长回弹曲线平滑复原
+   简洁版 / prefers-reduced-motion：glass.js 不接管，CSS 退回实体卡片。 */
+
+/* 让自定义属性可以插值：倾斜角度与光斑位置才能"平滑地"变化，而不是跳变。
+   inherits 必须为 true —— 光斑/亮环画在 ::before/::after 上，伪元素只能靠继承拿到这两个值 */
+@property --tx { syntax: "<number>"; inherits: true; initial-value: 0; }
+@property --ty { syntax: "<number>"; inherits: true; initial-value: 0; }
+@property --mx { syntax: "<length-percentage>"; inherits: true; initial-value: 50%; }
+@property --my { syntax: "<length-percentage>"; inherits: true; initial-value: 50%; }
+
+/* —— ① 材质：浅色玻璃（内容卡 / 统计卡 / 登录卡 / 设置栏目） —— */
+.card,
+.stat-card,
+.login-card,
+.set-nav {
+  /* 奶白磨砂：刻意不做到纯白（245~250 之间），留一点亮度余量——
+     否则光斑叠上去直接顶到 255，看不出"被照亮" */
+  background:
+    radial-gradient(135% 112% at 14% -14%, rgba(255, 255, 255, .62) 0%, rgba(255, 255, 255, 0) 62%),
+    linear-gradient(158deg, rgba(248, 252, 252, .94) 0%, rgba(239, 247, 247, .90) 100%);
+  -webkit-backdrop-filter: blur(16px) saturate(1.35);
+  backdrop-filter: blur(16px) saturate(1.35);
+  border: 1px solid rgba(255, 255, 255, .82);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .95),
+    inset 0 -1px 0 rgba(9, 38, 34, .06),
+    0 12px 30px -14px rgba(9, 38, 34, .22),
+    0 2px 6px rgba(9, 38, 34, .05);
+}
+/* 主色统计卡保留原来的青绿渐变（不换成白玻璃），只补一层玻璃高光边与更沉的投影 */
+.stat-card.primary {
+  background:
+    radial-gradient(120% 90% at 16% -10%, rgba(255, 255, 255, .22) 0%, rgba(255, 255, 255, 0) 62%),
+    linear-gradient(135deg, var(--primary-dark), var(--primary));
+  border-color: rgba(255, 255, 255, .26);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .30),
+    0 14px 30px -14px rgba(7, 62, 56, .48),
+    0 2px 6px rgba(9, 38, 34, .06);
+}
+/* 卡片内部原本是纯白的横条（表头、脚注）改成半透明，否则玻璃在它们那一块"断掉" */
+.card-foot { background: rgba(250, 252, 252, .55); border-top-color: rgba(216, 226, 228, .70); }
+.table th { background: rgba(250, 252, 252, .58); }
+
+/* —— ② 材质：深色玻璃（左侧菜单） + 把菜单拆成一张独立卡片 —— */
+.sidebar {
+  position: relative;
+  z-index: 2;                 /* 压在背景图层（z-index:0）与内容区（1）之上 */
+  margin: 10px;
+  border-radius: var(--r-lg);
+  background:
+    radial-gradient(125% 78% at 12% -12%, rgba(255, 255, 255, .12) 0%, rgba(255, 255, 255, 0) 56%),
+    linear-gradient(180deg,
+      color-mix(in srgb, var(--nav-1) 88%, transparent) 0%,
+      color-mix(in srgb, var(--nav-2) 92%, transparent) 100%);
+  -webkit-backdrop-filter: blur(18px) saturate(1.25);
+  backdrop-filter: blur(18px) saturate(1.25);
+  border: 1px solid rgba(255, 255, 255, .16);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .14),
+    inset 0 -1px 0 rgba(0, 0, 0, .28),
+    0 16px 34px -14px rgba(6, 24, 22, .48);
+}
+/* 卡片化之后四周留出 10px 间隙，菜单不再贴着窗口边；窗口顶部的拖动条照旧压在它上面 */
+.side-brand { padding-top: 6px; }
+
+/* —— ③ 交互：光斑 / 边框提亮 / 倾斜（.glass-surface 由 glass.js 在首次悬停时打上） —— */
+.card, .stat-card, .sidebar { position: relative; }
+
+.glass-surface {
+  transform: perspective(900px)
+             rotateX(calc(var(--tx) * 1deg))
+             rotateY(calc(var(--ty) * 1deg));
+  transform-origin: 50% 50%;
+  transform-style: preserve-3d;
+  transition:
+    --tx .16s ease-out, --ty .16s ease-out,
+    --mx .10s linear, --my .10s linear,
+    box-shadow .35s ease, border-color .35s ease;
+}
+/* 移出后的回弹：角度用带一点过冲的曲线慢慢归零，位置淡回中心 */
+.glass-surface.is-cool {
+  transition:
+    --tx .72s cubic-bezier(.16, .86, .30, 1), --ty .72s cubic-bezier(.16, .86, .30, 1),
+    --mx .50s ease, --my .50s ease,
+    box-shadow .50s ease, border-color .50s ease;
+}
+.glass-surface.is-hot {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .95),
+    inset 0 -1px 0 rgba(9, 38, 34, .06),
+    0 16px 36px -14px rgba(9, 38, 34, .28),
+    0 2px 8px rgba(9, 38, 34, .06);
+}
+
+/* 光斑：以 --mx/--my 为圆心的一团柔光。卡片本身已接近纯白，纯白叠加几乎看不见，
+   所以按真实打光的关系来做——中心加亮，边缘依次压暗（相当于卡片中心被照亮、四周落回阴影），
+   这样"一团光"才立得住；中心用一层冷白、外圈用极淡的青绿过渡。 */
+.card::before,
+.stat-card::before,
+.login-card::before,
+.set-nav::before,
+.sidebar::before {
+  content: '';
+  position: absolute; inset: 0; z-index: -1;
+  border-radius: inherit;
+  pointer-events: none;
+  background:
+    radial-gradient(260px 260px at var(--mx) var(--my),
+      rgba(255, 255, 255, 1) 0%,
+      rgba(255, 255, 255, .84) 18%,
+      rgba(240, 251, 249, .46) 38%,
+      rgba(220, 241, 238, .14) 56%,
+      rgba(9, 60, 55, .055) 76%,
+      rgba(9, 60, 55, .095) 100%);
+  opacity: 0;
+  transition: opacity .38s ease;
+}
+.glass-surface.is-hot::before { opacity: 1; }
+/* 主色统计卡本身是深青底，白色光斑要收着点，否则中心直接糊成白块 */
+.stat-card.primary::before {
+  background:
+    radial-gradient(240px 240px at var(--mx) var(--my),
+      rgba(255, 255, 255, .42) 0%,
+      rgba(255, 255, 255, .26) 26%,
+      rgba(255, 255, 255, .08) 52%,
+      rgba(0, 0, 0, .05) 84%,
+      rgba(0, 0, 0, .09) 100%);
+}
+/* 深色菜单上反过来：中心亮、四周更沉，光斑像从玻璃内部透上来 */
+.sidebar::before {
+  background:
+    radial-gradient(250px 250px at var(--mx) var(--my),
+      rgba(214, 250, 244, .32) 0%,
+      rgba(176, 234, 225, .18) 26%,
+      rgba(120, 200, 190, .07) 52%,
+      rgba(0, 0, 0, .10) 82%,
+      rgba(0, 0, 0, .16) 100%);
+}
+
+/* 边框局部提亮：同一圆心画一圈亮环，用 mask 把内部挖掉，只留 1px 边 */
+.card::after,
+.stat-card::after,
+.login-card::after,
+.set-nav::after,
+.sidebar::after {
+  content: '';
+  position: absolute; inset: 0; z-index: 1;
+  border-radius: inherit;
+  pointer-events: none;
+  padding: 1px;
+  background:
+    radial-gradient(220px 220px at var(--mx) var(--my),
+      rgba(255, 255, 255, .95) 0%,
+      rgba(255, 255, 255, .55) 34%,
+      rgba(255, 255, 255, 0) 72%);
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  opacity: 0;
+  transition: opacity .34s ease;
+}
+.glass-surface.is-hot::after { opacity: 1; }
+/* 深色菜单的边框本身就是浅白，提亮用更亮的青白，避免整圈糊成一片 */
+.sidebar::after {
+  background:
+    radial-gradient(220px 220px at var(--mx) var(--my),
+      rgba(214, 250, 244, .92) 0%,
+      rgba(178, 236, 226, .48) 36%,
+      rgba(255, 255, 255, 0) 72%);
+}
+
+/* —— ④ 降级：简洁版关掉模糊 / 光斑 / 倾斜，退回不透明实体卡 —— */
+body.ui-lite .card,
+body.ui-lite .stat-card,
+body.ui-lite .stat-card.primary,
+body.ui-lite .login-card,
+body.ui-lite .set-nav,
+body.ui-lite .sidebar {
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+  transform: none !important;
+  transition: none !important;
+}
+body.ui-lite .card,
+body.ui-lite .login-card,
+body.ui-lite .set-nav { background: var(--surface); border-color: var(--line); }
+body.ui-lite .stat-card:not(.primary) { background: var(--surface); border-color: var(--line); }
+body.ui-lite .sidebar {
+  background: linear-gradient(180deg, var(--nav-1) 0%, var(--nav-2) 100%);
+  border-color: rgba(255, 255, 255, .10);
+}
+body.ui-lite .card::before, body.ui-lite .card::after,
+body.ui-lite .stat-card::before, body.ui-lite .stat-card::after,
+body.ui-lite .login-card::before, body.ui-lite .login-card::after,
+body.ui-lite .set-nav::before, body.ui-lite .set-nav::after,
+body.ui-lite .sidebar::before, body.ui-lite .sidebar::after { display: none !important; }
+
 /* ============ 液态玻璃（独立开关，标准版内也可关） ============
    原理：backdrop-filter 里挂 SVG 位移滤镜（feTurbulence → feDisplacementMap），
    把玻璃后面的背景真正“掰弯”，做出透镜折射；再叠一层白色高光渐变和内侧高光边，
@@ -979,3 +1215,97 @@ body.ui-liquid:not(.ui-lite) .terms-consent {
   backdrop-filter: blur(1px) saturate(1.3);
 }
 body.ui-liquid:not(.ui-lite) .terms-consent.on { background: rgba(231, 245, 242, .82); }
+
+/* ============ 加载骨架屏 / 真实进度 / 卡片入场 ============
+   ① .sk     灰色占位块，尺寸由 jsx 传 inline style，颜色只有亮底 / 深底两种
+   ② .sk-shine 整块骨架上的一层半透明光，从左往右匀速平移，1.5s 一轮、无限重复，
+      只改 transform，不碰布局也不重绘文字
+   ③ .sk-progress 填充条用 translate3d 挪位置（过渡补平），进度只由真实完成的步骤驱动
+   ④ .card.reveal 卡片从 blur(14px) + 透明回到正常，700ms，彼此间隔 0.05s
+   简洁版由 body.ui-lite 的 animation/transition:none 统一关掉 */
+
+.sk-scope { position: relative; overflow: hidden; }
+
+.sk {
+  display: block; flex: none;
+  border-radius: 9px;
+  background: rgba(124, 146, 148, .20);
+}
+.sk.sk-on-dark { background: rgba(255, 255, 255, .15); }
+.sk-logo { width: 52px; height: 52px; border-radius: 15px; }
+.sk-logo.sm { width: 34px; height: 34px; border-radius: 11px; }
+.sk-dot { width: 10px; height: 10px; border-radius: 50%; }
+.sk-nav { width: 100%; height: 40px; border-radius: 10px; }
+.sk-list { display: grid; gap: 12px; margin-top: 34px; }
+.sk-row { display: flex; align-items: center; gap: 9px; }
+.sk-col { display: flex; flex-direction: column; }
+.sk-card { width: 360px; }
+
+.sk-box {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+.sk-box-card { padding: 15px 18px 18px; }
+.sk-box-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.sk-box-body { display: grid; gap: 10px; margin-top: 14px; }
+
+.sk-progress-wrap { margin: 14px 0 16px; }
+.sk-card .sk-progress-wrap { margin: 20px 0 0; }
+
+.sk-progress {
+  position: relative; height: 3px; border-radius: 999px;
+  background: rgba(124, 146, 148, .18);
+  overflow: hidden;
+}
+.sk-progress i {
+  position: absolute; inset: 0; border-radius: inherit;
+  background: linear-gradient(90deg, var(--primary), var(--primary-dark));
+  transform: translate3d(-100%, 0, 0);
+  transition: transform .3s cubic-bezier(.22, .72, .26, 1);
+  will-change: transform;
+}
+
+/* 扫光：光带宽 46%，从左侧边缘进来、到右侧完全出界为止，位移量恒定 → 匀速。
+   纯白的光在白底上等于看不见，所以光带两侧带一点很淡的青灰（品牌冷色），
+   这样亮底、灰块、深色菜单三处都能看出这道光在走 */
+.sk-shine {
+  position: absolute; inset: 0; z-index: 4;
+  pointer-events: none; overflow: hidden;
+}
+.sk-shine::before {
+  content: ""; position: absolute; top: 0; bottom: 0; left: 0; width: 46%;
+  background: linear-gradient(100deg,
+    rgba(148, 196, 190, 0) 0%,
+    rgba(148, 196, 190, .22) 30%,
+    rgba(255, 255, 255, .88) 54%,
+    rgba(148, 196, 190, .18) 76%,
+    rgba(148, 196, 190, 0) 100%);
+  transform: translate3d(-100%, 0, 0);
+  animation: skSweep 1500ms linear infinite;
+  will-change: transform;
+}
+@keyframes skSweep {
+  from { transform: translate3d(-100%, 0, 0); }
+  to   { transform: translate3d(240%, 0, 0); }
+}
+
+/* 卡片入场：模糊与透明度一起回到正常，700ms；--reveal-i 决定出场次序 */
+@keyframes cardIn {
+  from { opacity: 0; filter: blur(14px); }
+  to   { opacity: 1; filter: blur(0); }
+}
+.card.reveal,
+.stat-card.reveal {
+  animation: cardIn 700ms cubic-bezier(.2, .7, .3, 1) backwards;
+  animation-delay: calc(var(--reveal-i, 0) * 0.05s);
+}
+
+/* 数字滚动：等宽数字，避免从 0 往上滚时整行左右抖动 */
+.roll-num { font-variant-numeric: tabular-nums; }
+
+/* 骨架里模仿「近 7 日消费」的柱状图与「积分榜」的列表 */
+.sk-bars { display: flex; align-items: flex-end; gap: 8px; height: 158px; margin-top: 16px; }
+.sk-bar-col { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; }
+.sk-rows { display: grid; gap: 12px; margin-top: 16px; }

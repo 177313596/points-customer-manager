@@ -1,14 +1,17 @@
 import React, { useEffect, useState } from 'react';
 import { api } from '../utils';
-import { Icon, PasswordInput, Modal, Spotlight } from '../ui';
+import { Icon, PasswordInput } from '../ui';
 import TermsGate, { TermsBody } from './TermsGate';
 import { applyTheme } from '../theme';
+import { LoginSkeleton } from '../skeleton';
 import brandLogo from '../assets/brand-logo.png';
 
 const BG_ROTATE_MS = 8000; // 多张背景图轮播间隔
+const MIN_SKELETON_MS = 520; // 骨架屏最短展示：status 很快也要留住，让扫光和进度条走完一小段
 
 export default function Login({ onAuthed }) {
   const [mode, setMode] = useState('loading');
+  const [loadP, setLoadP] = useState(0); // 登录前的真实加载进度（status 拿到 = 1）
   const [shopName, setShopName] = useState('积分客户管理系统');
   const [storedUser, setStoredUser] = useState('');
   const [version, setVersion] = useState('');
@@ -16,7 +19,6 @@ export default function Login({ onAuthed }) {
   const [loginUser, setLoginUser] = useState('');
   const [pw, setPw] = useState('');
   const [pw2, setPw2] = useState('');
-  const [setupDone, setSetupDone] = useState(false); // 初始化完成 → 弹窗提醒可设二级密码
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
   const [loginBgs, setLoginBgs] = useState([]);   // 背景图列表（可多张，默认只显示第一张）
@@ -27,7 +29,19 @@ export default function Login({ onAuthed }) {
   const [showTerms, setShowTerms] = useState(false);      // 仅是"查看声明"，不要求同意
 
   useEffect(() => {
+    let alive = true;
+    const t0 = performance.now();
+    // 真实的加载只有一步：拿到 status（店名 / 版本 / 背景图 / 主题 / 是否已初始化）。
+    // 进度条也只在真正拿到它之后才走满，不自己编进度。
+    const settle = (next) => {
+      if (!alive) return;
+      setLoadP(1);
+      const rest = MIN_SKELETON_MS - (performance.now() - t0);
+      setTimeout(() => { if (alive) setMode(next); }, Math.max(0, rest));
+    };
     api.status().then((r) => {
+      if (!alive) return;
+      let next = 'login';
       if (r.ok) {
         setShopName(r.data.shop_name || '积分客户管理系统');
         setVersion(r.data.version || '');
@@ -43,12 +57,13 @@ export default function Login({ onAuthed }) {
         document.body.classList.toggle('ui-lite', liteMode);
         applyTheme(r.data.theme);
         setTermsAccepted(r.data.terms_accepted || '');
-        setMode(r.data.hasPassword ? 'login' : 'setup');
+        next = r.data.hasPassword ? 'login' : 'setup';
       } else {
         setErr(r.error);
-        setMode('login');
       }
-    });
+      settle(next);
+    }).catch(() => { if (alive) settle('login'); });
+    return () => { alive = false; };
   }, []);
 
   // 多张背景图：仅在设置里打开"自动切换"时才按固定间隔轮换，切换时新图用"高斯模糊 → 清晰"淡入
@@ -85,18 +100,16 @@ export default function Login({ onAuthed }) {
     if (pw.length < 4) return setErr('登录密码至少 4 位');
     if (pw !== pw2) return setErr('两次输入的登录密码不一致');
     setBusy(true);
-    // 二级操作密码不再在注册时必填：默认关闭，可在设置 → 安全设置里开启
+    // 二级操作密码不在注册时设置：默认关闭，注册完成先进主界面，再弹一次提醒
     const r = await api.setup(pw, '', uname.trim());
     setBusy(false);
     if (!r.ok) return setErr(r.error);
-    setSetupDone(true);
+    onAuthed({ opPrompt: true });
   }
 
-  function finishSetup(withOp) {
-    setSetupDone(false);
-    if (withOp) onAuthed({ page: 'settings', tab: 'security' });
-    else onAuthed();
-  }
+  // 登录前的加载：骨架屏按登录卡的真实布局摆占位块，上面盖一层从左往右的扫光，
+  // 进度条只在 status 真正返回时走满
+  if (mode === 'loading') return <LoginSkeleton progress={loadP} />;
 
   return (
     <div className="login-wrap">
@@ -124,10 +137,7 @@ export default function Login({ onAuthed }) {
             />
           </div>
         ) : null}
-        <Spotlight />
-        {mode === 'loading' ? (
-          <div className="login-card"><div className="loading-dot" /></div>
-        ) : mode === 'setup' ? (
+        {mode === 'setup' ? (
           <form className="login-card" onSubmit={doSetup}>
             <span className="pill">首次使用 · 初始化</span>
             <h2>设置用户名与登录密码</h2>
@@ -170,29 +180,9 @@ export default function Login({ onAuthed }) {
         </button>
       </main>
 
-      {mode !== 'loading' && !termsAccepted ? (
+      {!termsAccepted ? (
         <TermsGate onAccepted={(v) => { setTermsAccepted(v || 'ok'); }} />
       ) : null}
-
-      {/* 初始化完成后的提醒：二级操作密码是可选项，随时可在设置里开启 */}
-      <Modal
-        open={setupDone}
-        title="初始化完成"
-        subtitle="二级操作密码（可选 · 默认关闭）"
-        onClose={() => finishSetup(false)}
-        footer={(
-          <>
-            <button className="btn btn-ghost" onClick={() => finishSetup(false)} type="button">稍后再说</button>
-            <button className="btn btn-primary" onClick={() => finishSetup(true)} type="button">现在去设置</button>
-          </>
-        )}
-      >
-        <p className="io-note" style={{ marginTop: 0 }}>系统已创建完成，现在只用登录密码即可进入。</p>
-        <p className="io-note">
-          如需给消费、兑换、导入、修改设置等敏感操作再加一道验证，可前往「设置 → 安全设置」开启二级操作密码。
-          开启后每次登录只需验证一次；之后连续 5 分钟内有操作就一直免验证，超过 5 分钟没操作才会重新要求输入（手动调整积分每次都需输入）。
-        </p>
-      </Modal>
 
       {showTerms ? (
         <div className="terms-gate" onClick={() => setShowTerms(false)}>

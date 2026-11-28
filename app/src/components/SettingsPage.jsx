@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { api, fmtMoney, relativeTime } from '../utils';
-import { Icon, Field, Modal, Switch, PasswordInput } from '../ui';
+import { Icon, Field, Modal, Switch, PasswordInput, NavPill } from '../ui';
 import { ACCENT_PRESETS, DEFAULT_ACCENT, applyTheme, normalizeAccent } from '../theme';
 
 function Section({ title, desc, icon, children, foot }) {
@@ -77,6 +77,7 @@ export default function SettingsPage({ settings, call, refresh, notify, elevated
   /* ---- 多张背景图 ---- */
   const [bgs, setBgs] = useState([]);
   const [bgBusy, setBgBusy] = useState(false);
+  const setNavRef = useRef(null);
   const bgFileRef = useRef(null);
 
   /* ---- 个性化配色 ---- */
@@ -356,7 +357,8 @@ export default function SettingsPage({ settings, call, refresh, notify, elevated
 
   return (
     <div className="set-layout">
-      <aside className="set-nav">
+      <aside className="set-nav" ref={setNavRef}>
+        <NavPill hostRef={setNavRef} activeKey={tab} className="set-pill" maxStretch={0.14} />
         {TABS.map((t) => (
           <button
             key={t.key}
@@ -765,3 +767,4 @@ export default function SettingsPage({ settings, call, refresh, notify, elevated
     </div>
   );
 }
+
