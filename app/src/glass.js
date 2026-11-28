@@ -10,6 +10,9 @@
 
 const TILT_MAX = 4;                       // 最大倾斜角（度）
 const TARGETS = '.card, .stat-card, .login-card, .sidebar, .set-nav';
+/* 倾斜只在工作台里生效：其它页面 / 登录卡 / 菜单 / 设置二级栏目只保留光斑与边框提亮，
+   悬停时卡片本身不跟着指针转（v1.2.0 起） */
+const TILT_SCOPE = '.dash';
 
 let installed = false;
 
@@ -67,7 +70,12 @@ export function initGlassCards() {
     hot.style.setProperty('--mx', x.toFixed(1) + 'px');
     hot.style.setProperty('--my', y.toFixed(1) + 'px');
 
-    if (noMotion()) return;
+    if (noMotion() || !hot.closest(TILT_SCOPE)) {
+      // 非工作台：角度钉在 0，只走光斑；避免卡片跟着指针转
+      hot.style.setProperty('--tx', '0');
+      hot.style.setProperty('--ty', '0');
+      return;
+    }
     const nx = (x / r.width - 0.5) * 2;   // -1（最左）… 1（最右）
     const ny = (y / r.height - 0.5) * 2;
     // 指针那一侧朝观察者抬起来：右下角 → 底部与右侧靠近

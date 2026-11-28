@@ -179,7 +179,7 @@ $env:VITE_DEV_SERVER_URL="http://localhost:5173"; npm start   # 终端 B
 
 ```powershell
 cd app
-npm run build:installer     # 产出 release\积分客户管理系统-安装包-1.1.9.exe（NSIS）
+npm run build:installer     # 产出 release\积分客户管理系统-安装包-1.2.0.exe（NSIS）
 ```
 
 或在仓库根目录使用一键脚本（会先构建界面再同步 / 打包）：
@@ -216,7 +216,7 @@ npm run build:installer     # 产出 release\积分客户管理系统-安装包-
 │   ├── icon.png
 │   └── screenshots/
 ├── 积分客户管理系统/             # 免安装目录版成品（可选提交 / 建议走 Release）
-├── 积分客户管理系统-安装包-1.1.9.exe
+├── 积分客户管理系统-安装包-1.2.0.exe
 ├── 重新构建.ps1
 ├── 构建安装包.ps1
 ├── 使用说明.md                  # 面向使用者的完整手册
@@ -282,6 +282,13 @@ npm run build:installer     # 产出 release\积分客户管理系统-安装包-
 ---
 
 ## 🗒 更新日志
+
+**v1.2.0（2026-11-28）· 已打包安装包 1.2.0**
+
+- **安装包**：`PointsCustomerManager-Setup-1.2.0.exe`（约 78 MB，NSIS、x64），见 [Releases](https://github.com/177313596/points-customer-manager/releases/tag/v1.2.0)。
+- **倾斜只在工作台**：鼠标悬停卡片的 3D 倾斜（≤4°）现在只对**工作台**里的卡片生效（三张统计卡 + 两块内容卡）。顾客管理、消费记录、导入导出、设置页的卡片、左侧菜单、设置二级栏目、登录卡**一律不再倾斜**，悬停时只保留柔和光斑与边框局部提亮——卡片本身不再跟着指针转。
+- 实现上在 `src/glass.js` 里加了 `TILT_SCOPE = '.dash'`：指针落在卡上时先判断 `closest('.dash')`，不在工作台就把 `--tx/--ty` 钉在 0（回弹曲线照旧，不会突然一跳），光斑坐标 `--mx/--my` 与 `.is-hot` 边框提亮不受影响。
+- 新增 `app/scripts/tilt-scope-check.js` 做逐页实测：工作台卡片 `--ty = -3.38°`（会倾），顾客管理 / 消费记录 / 导入导出 / 设置卡片与菜单、登录卡全部 `0°`（只亮不倾）。`headless-check.js` 仍 **RESULT ALL-PASS**。
 
 **v1.1.9（2026-11-28）· 已打包安装包 1.1.9**
 
